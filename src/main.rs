@@ -11,6 +11,8 @@ use serenity::model::channel::Message;
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
+mod music;
+
 struct Handler;
 
 #[async_trait]
