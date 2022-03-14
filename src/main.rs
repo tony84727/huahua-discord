@@ -8,6 +8,7 @@ use serenity::framework::{
     StandardFramework,
 };
 use serenity::model::channel::Message;
+use songbird::SerenityInit;
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
@@ -19,7 +20,7 @@ struct Handler;
 impl EventHandler for Handler {}
 
 #[group]
-#[commands(ping)]
+#[commands(join)]
 struct General;
 
 async fn load_token_file() -> io::Result<String> {
@@ -44,14 +45,18 @@ async fn load_token() -> String {
 }
 
 #[command]
-async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.reply(ctx, "Pong!").await?;
-
-    Ok(())
+async fn join(ctx: &Context, msg: &Message) -> CommandResult {
+    music::join(ctx, msg).await
 }
 
 #[tokio::main]
 async fn main() {
+    // env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+    //     .filter_module("tracing::span", log::LevelFilter::Error)
+    //     .init();
+    env_logger::Builder::from_default_env()
+        .filter_module("huahua_discord", log::LevelFilter::Info)
+        .init();
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
         .group(&GENERAL_GROUP);
@@ -59,9 +64,18 @@ async fn main() {
     let mut client = Client::builder(token)
         .event_handler(Handler)
         .framework(framework)
+        .register_songbird()
         .await
         .expect("error while creating client");
-    if let Err(why) = client.start().await {
-        println!("an error occurred while running the client: {:?}", why);
-    }
+    tokio::spawn(async move {
+        let _ = client
+            .start()
+            .await
+            .map_err(|why| log::error!("client stopped: {:?}", why));
+    });
+    tokio::signal::ctrl_c().await.unwrap();
+    println!("received ctrl-c, shutting down");
+    // if let Err(why) = client.start().await {
+    //     println!("an error occurred while running the client: {:?}", why);
+    // }
 }
