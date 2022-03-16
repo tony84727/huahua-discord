@@ -52,6 +52,19 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
     }
 }
 
+#[command]
+pub async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild_id = msg.guild_id.unwrap();
+    let manager = songbird::get(ctx).await.unwrap();
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let mut handler = handler_lock.lock().await;
+        handler.leave().await.unwrap();
+    } else {
+        check_msg(msg.reply(ctx, "本毛沒在唱").await)
+    }
+    Ok(())
+}
+
 fn check_msg(result: serenity::Result<Message>) {
     if let Err(err) = result {
         log::error!("error sending message: {:?}", err);
