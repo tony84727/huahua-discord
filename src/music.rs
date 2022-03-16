@@ -1,16 +1,43 @@
 use serenity::{
+    cache::FromStrAndCache,
     client::Context,
     framework::standard::{macros::command, Args, CommandResult},
     model::{
-        channel::Message,
+        channel::{Channel, ChannelType, Message},
         id::{ChannelId, GuildId},
     },
 };
-
 #[command]
-pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
+pub async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    match args.single::<String>() {
+        Ok(channel_id) => {
+            let channel_id = match ChannelId::from_str(ctx, &channel_id).await {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(());
+                }
+            };
+            let channel = match channel_id.to_channel(ctx).await {
+                Ok(channel) => channel,
+                Err(_) => {
+                    return Ok(());
+                }
+            };
+            match channel {
+                Channel::Guild(channel) if channel.kind == ChannelType::Voice => channel,
+                _ => {
+                    return Ok(());
+                }
+            };
+            if let Err(err) = join_channel(ctx, msg.guild_id.unwrap(), channel_id).await {
+                log::error!("fail to join voice channel, {:?}", err);
+            }
+            return Ok(());
+        }
+        Err(_) => (),
+    }
     match find_voice_channel_of_user(ctx, msg).await {
-        Some((guild_id, channel_id)) => match play_in_channel(ctx, guild_id, channel_id).await {
+        Some((guild_id, channel_id)) => match join_channel(ctx, guild_id, channel_id).await {
             Ok(()) => (),
             Err(err) => {
                 log::error!("fail to join voice channel, {:?}", err)
@@ -71,7 +98,7 @@ fn check_msg(result: serenity::Result<Message>) {
     }
 }
 
-async fn play_in_channel(
+async fn join_channel(
     ctx: &Context,
     guild_id: GuildId,
     channel_id: ChannelId,
