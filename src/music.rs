@@ -90,7 +90,7 @@ async fn try_play_file<P: AsRef<OsStr> + Debug>(
     guild_id: GuildId,
     path: P,
 ) -> Result<(), PlayError> {
-    let source = match songbird::ffmpeg("./resources/tc.mp3").await {
+    let source = match songbird::ffmpeg(&path).await {
         Ok(input) => input,
         Err(err) => {
             log::error!("cannot play {:?} sound effect, {:?}", path, err);
@@ -140,6 +140,20 @@ pub async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
         Err(err) if err == PlayError::NotInChannel => {
             try_join_channel(ctx, msg, None).await;
             try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3")
+                .await
+                .unwrap();
+        }
+        _ => (),
+    };
+    Ok(())
+}
+
+#[command]
+pub async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
+    match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3").await {
+        Err(err) if err == PlayError::NotInChannel => {
+            try_join_channel(ctx, msg, None).await;
+            try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3")
                 .await
                 .unwrap();
         }
