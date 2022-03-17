@@ -1,3 +1,5 @@
+use std::{ffi::OsStr, fmt::Debug};
+
 use serenity::{
     cache::FromStrAndCache,
     client::Context,
@@ -7,6 +9,7 @@ use serenity::{
         id::{ChannelId, GuildId},
     },
 };
+use songbird::input::Input;
 async fn try_join_channel(ctx: &Context, msg: &Message, channel_id: Option<ChannelId>) {
     match channel_id {
         Some(channel_id) => {
@@ -63,6 +66,7 @@ pub async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 #[derive(Debug, PartialEq)]
 enum PlayError {
     NotInChannel,
+    CannotPlay,
 }
 async fn try_play_ytdl(
     ctx: &Context,
@@ -70,18 +74,37 @@ async fn try_play_ytdl(
     url: &str,
     guild_id: GuildId,
 ) -> Result<(), PlayError> {
+    let source = match songbird::ytdl(&url).await {
+        Ok(source) => source,
+        Err(why) => {
+            log::error!("cannot play youtube, url: {:?}", why);
+            check_msg(msg.reply(&ctx.http, "無法播放QAQ").await);
+            return Ok(());
+        }
+    };
+    try_play_source(ctx, guild_id, source).await
+}
+
+async fn try_play_file<P: AsRef<OsStr> + Debug>(
+    ctx: &Context,
+    guild_id: GuildId,
+    path: P,
+) -> Result<(), PlayError> {
+    let source = match songbird::ffmpeg("./resources/tc.mp3").await {
+        Ok(input) => input,
+        Err(err) => {
+            log::error!("cannot play {:?} sound effect, {:?}", path, err);
+            return Err(PlayError::CannotPlay);
+        }
+    };
+    try_play_source(ctx, guild_id, source).await
+}
+
+async fn try_play_source(ctx: &Context, guild_id: GuildId, source: Input) -> Result<(), PlayError> {
     let manager = songbird::get(ctx).await.unwrap();
     match manager.get(guild_id) {
         Some(handler_lock) => {
             let mut handler = handler_lock.lock().await;
-            let source = match songbird::ytdl(&url).await {
-                Ok(source) => source,
-                Err(why) => {
-                    log::error!("cannot play youtube, url: {:?}", why);
-                    check_msg(msg.reply(&ctx.http, "無法播放QAQ").await);
-                    return Ok(());
-                }
-            };
             handler.play_only_source(source);
             Ok(())
         }
@@ -108,6 +131,20 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         }
         _ => (),
     }
+    Ok(())
+}
+
+#[command]
+pub async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
+    match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3").await {
+        Err(err) if err == PlayError::NotInChannel => {
+            try_join_channel(ctx, msg, None).await;
+            try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3")
+                .await
+                .unwrap();
+        }
+        _ => (),
+    };
     Ok(())
 }
 

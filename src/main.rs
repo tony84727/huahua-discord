@@ -9,7 +9,7 @@ use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt};
 
 mod music;
-use music::{JOIN_COMMAND, PLAY_COMMAND, STOP_COMMAND};
+use music::{JOIN_COMMAND, PLAY_COMMAND, STOP_COMMAND, TBC_COMMAND};
 
 struct Handler;
 
@@ -17,7 +17,7 @@ struct Handler;
 impl EventHandler for Handler {}
 
 #[group]
-#[commands(join, play, stop)]
+#[commands(join, play, stop, tbc)]
 struct General;
 
 async fn load_token_file() -> io::Result<String> {
