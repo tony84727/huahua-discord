@@ -1,13 +1,10 @@
-use std::env::VarError;
-
 use async_trait::async_trait;
 use serenity::client::{Client, EventHandler};
 use serenity::framework::standard::macros::group;
 use serenity::framework::StandardFramework;
 use songbird::SerenityInit;
-use tokio::fs::File;
-use tokio::io::{self, AsyncReadExt};
 
+mod config;
 mod music;
 use music::{JOIN_COMMAND, PLAY_COMMAND, PWTF_COMMAND, STOP_COMMAND, TBC_COMMAND};
 
@@ -20,37 +17,16 @@ impl EventHandler for Handler {}
 #[commands(join, play, stop, tbc, pwtf)]
 struct General;
 
-async fn load_token_file() -> io::Result<String> {
-    let mut f = File::open("TOKEN").await?;
-    let mut buf = vec![];
-    f.read_to_end(&mut buf).await?;
-    Ok(String::from_utf8(buf).unwrap())
-}
-
-async fn load_token() -> String {
-    match std::env::var("TOKEN") {
-        Ok(token) => {
-            return token;
-        }
-        Err(err) if err == VarError::NotPresent => {
-            return load_token_file().await.unwrap();
-        }
-        Err(err) => {
-            panic!("{}", err);
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_default_env()
         .filter_module("huahua_discord", log::LevelFilter::Info)
         .init();
+    let bot_config = config::Bot::load().await.expect("fail to load bot config");
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
         .group(&GENERAL_GROUP);
-    let token = load_token().await;
-    let mut client = Client::builder(token)
+    let mut client = Client::builder(bot_config.token)
         .event_handler(Handler)
         .framework(framework)
         .register_songbird()
