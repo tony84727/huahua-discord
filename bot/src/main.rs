@@ -3,9 +3,8 @@ use serenity::client::{Client, EventHandler};
 use serenity::framework::StandardFramework;
 use songbird::SerenityInit;
 
-mod config;
-mod music;
-use music::MUSIC_GROUP;
+use hualib::config;
+use hualib::music::MUSIC_GROUP;
 
 struct Handler;
 
