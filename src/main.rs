@@ -1,21 +1,16 @@
 use async_trait::async_trait;
 use serenity::client::{Client, EventHandler};
-use serenity::framework::standard::macros::group;
 use serenity::framework::StandardFramework;
 use songbird::SerenityInit;
 
 mod config;
 mod music;
-use music::{JOIN_COMMAND, PLAY_COMMAND, PWTF_COMMAND, STOP_COMMAND, TBC_COMMAND};
+use music::MUSIC_GROUP;
 
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {}
-
-#[group]
-#[commands(join, play, stop, tbc, pwtf)]
-struct General;
 
 #[tokio::main]
 async fn main() {
@@ -25,7 +20,7 @@ async fn main() {
     let bot_config = config::Bot::load().await.expect("fail to load bot config");
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
-        .group(&GENERAL_GROUP);
+        .group(&MUSIC_GROUP);
     let mut client = Client::builder(bot_config.token)
         .event_handler(Handler)
         .framework(framework)

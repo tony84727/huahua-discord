@@ -3,13 +3,21 @@ use std::{ffi::OsStr, fmt::Debug};
 use serenity::{
     cache::FromStrAndCache,
     client::Context,
-    framework::standard::{macros::command, Args, CommandResult},
+    framework::standard::{
+        macros::{command, group},
+        Args, CommandResult,
+    },
     model::{
         channel::{Channel, ChannelType, Message},
         id::{ChannelId, GuildId},
     },
 };
 use songbird::input::Input;
+
+#[group]
+#[commands(join, play, stop, tbc, pwtf)]
+struct Music;
+
 async fn try_join_channel(ctx: &Context, msg: &Message, channel_id: Option<ChannelId>) {
     match channel_id {
         Some(channel_id) => {
@@ -53,7 +61,7 @@ async fn try_parse_voice_channel_id(ctx: &Context, id: &str) -> Option<ChannelId
 }
 
 #[command]
-pub async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let channel_id = args.single::<String>().ok();
     let channel_id = match channel_id {
         Some(id) => try_parse_voice_channel_id(ctx, &id).await,
@@ -113,7 +121,7 @@ async fn try_play_source(ctx: &Context, guild_id: GuildId, source: Input) -> Res
 }
 
 #[command]
-pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let url = match args.single::<String>() {
         Ok(url) => url,
         Err(_) => {
@@ -135,7 +143,7 @@ pub async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 }
 
 #[command]
-pub async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
+async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
     match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3").await {
         Err(err) if err == PlayError::NotInChannel => {
             try_join_channel(ctx, msg, None).await;
@@ -149,7 +157,7 @@ pub async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-pub async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
+async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
     match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3").await {
         Err(err) if err == PlayError::NotInChannel => {
             try_join_channel(ctx, msg, None).await;
@@ -163,7 +171,7 @@ pub async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-pub async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
+async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
     let manager = songbird::get(ctx).await.unwrap();
     if let Some(handler_lock) = manager.get(guild_id) {
