@@ -1,3 +1,6 @@
+use mongodb::bson::doc;
+use serde::{Deserialize, Serialize};
+use serenity::model::id::UserId;
 use std::path::{Path, PathBuf};
 use tokio::{fs, io};
 
@@ -66,6 +69,61 @@ impl LocalStore {
         match fs::File::open(path).await {
             Ok(_) => Ok(true),
             Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(err) => Err(err),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Fx {
+    name: String,
+    description: String,
+    author: UserId,
+}
+
+enum RepositoryAddError {
+    IO(mongodb::error::Error),
+}
+
+enum RepositoryGetError {
+    IO(mongodb::error::Error),
+    NotFound,
+}
+
+#[async_trait]
+trait Repository {
+    async fn add(&self, fx: Fx) -> Result<(), RepositoryAddError>;
+    async fn get(&self, name: &str) -> Result<Fx, RepositoryGetError>;
+}
+
+struct MongoDBRepository {
+    client: mongodb::Database,
+}
+
+#[async_trait]
+impl Repository for MongoDBRepository {
+    async fn add(&self, fx: Fx) -> Result<(), RepositoryAddError> {
+        self.client
+            .collection("fx")
+            .insert_one(fx, None)
+            .await
+            .map(|_| ())
+            .map_err(RepositoryAddError::IO)
+    }
+
+    async fn get(&self, name: &str) -> Result<Fx, RepositoryGetError> {
+        let condition = doc! {
+            "name": name
+        };
+        match self
+            .client
+            .collection("fx")
+            .find_one(condition, None)
+            .await
+            .map_err(RepositoryGetError::IO)
+        {
+            Ok(Some(result)) => Ok(result),
+            Ok(None) => Err(RepositoryGetError::NotFound),
             Err(err) => Err(err),
         }
     }

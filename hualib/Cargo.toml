@@ -13,3 +13,4 @@ songbird = "0.2.2"
 log = "0.4.14"
 serde = {version = "1.0.136", features = ["derive"]}
 toml = "0.5.8"
+mongodb = "2.1.0"

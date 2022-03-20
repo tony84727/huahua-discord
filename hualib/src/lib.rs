@@ -1,3 +1,4 @@
-pub mod fx;
 pub mod config;
+pub mod db;
+pub mod fx;
 pub mod music;
