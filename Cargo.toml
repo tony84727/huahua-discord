@@ -1,2 +1,2 @@
 [workspace]
-members = ["hualib", "bot"]
+members = ["hualib", "bot", "fxutil"]

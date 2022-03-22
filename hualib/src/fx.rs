@@ -2,6 +2,8 @@ use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 use serenity::model::id::UserId;
 use std::path::{Path, PathBuf};
+use std::process::{Child, ChildStdout, Command, Stdio};
+use std::time::Duration;
 use tokio::{fs, io};
 
 use async_trait::async_trait;
@@ -75,10 +77,18 @@ impl LocalStore {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Fx {
-    name: String,
-    description: String,
-    author: UserId,
+pub struct MediaOrigin {
+    pub url: String,
+    pub start: Duration,
+    pub length: Duration,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Fx {
+    pub name: String,
+    pub description: String,
+    pub author: UserId,
+    pub origin: MediaOrigin,
 }
 
 enum RepositoryAddError {
@@ -126,5 +136,60 @@ impl Repository for MongoDBRepository {
             Ok(None) => Err(RepositoryGetError::NotFound),
             Err(err) => Err(err),
         }
+    }
+}
+
+#[async_trait]
+pub trait Creator {
+    type Output: std::io::Read;
+    type Error;
+    async fn create(&self, origin: &MediaOrigin) -> Result<Self::Output, Self::Error>;
+}
+
+#[derive(Debug)]
+pub enum YoutubeDLCreateError {
+    YoutubeDL(io::Error),
+    FFmepg(io::Error),
+}
+
+pub struct YoutubeDLCreator;
+
+#[async_trait]
+impl Creator for YoutubeDLCreator {
+    type Output = songbird::input::Reader;
+    type Error = YoutubeDLCreateError;
+
+    async fn create(&self, origin: &MediaOrigin) -> Result<Self::Output, Self::Error> {
+        let mut ytdl = Command::new("youtube-dl")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .args([origin.url.as_str(), "-o", "-", "--audio-format", "best"])
+            .spawn()
+            .map_err(YoutubeDLCreateError::YoutubeDL)?;
+        let ytdl_out = ytdl.stdout.take().unwrap();
+        let ffmpeg = Self::cut(origin, ytdl_out)
+            .await
+            .map_err(YoutubeDLCreateError::FFmepg)?;
+        Ok(songbird::input::children_to_reader::<u8>(vec![
+            ytdl, ffmpeg,
+        ]))
+    }
+}
+
+impl YoutubeDLCreator {
+    async fn cut(origin: &MediaOrigin, output: ChildStdout) -> io::Result<Child> {
+        Command::new("ffmpeg")
+            .stdin(output)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .arg("-ss")
+            .arg(format!("{}", origin.start.as_secs()))
+            .arg("-t")
+            .arg(format!("{}", origin.length.as_secs()))
+            .args(&["-i", "-"])
+            .arg("-f")
+            .arg("mp3")
+            .arg("-")
+            .spawn()
     }
 }
