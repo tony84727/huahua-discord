@@ -1,5 +1,5 @@
-pub mod bot;
 pub mod audio;
+pub mod bot;
 pub mod config;
 pub mod db;
 pub mod fx;
