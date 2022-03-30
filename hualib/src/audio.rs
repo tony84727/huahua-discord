@@ -2,44 +2,6 @@ use songbird::input::{reader::MediaSource, Codec, Container, Input, Reader};
 use std::io::{Read, Seek, SeekFrom};
 
 fn mp3_to_songbird_input<R: Read + Seek + Send + 'static>(source: R) -> Input {
-    // format::Context::Input
-    // ctx.decoder().
-    // let encoding = duct::cmd!(
-    //     "ffmpeg",
-    //     "-i",
-    //     "-",
-    //     "-f",
-    //     "s16le",
-    //     "-ac",
-    //     "2",
-    //     "-ar",
-    //     "48000",
-    //     "-acodec",
-    //     "pcm_s16le",
-    //     "-",
-    // )
-    // .stdin_file(source)
-    // .read
-    // let encoder = Command::new("ffmpeg")
-    //     .stdin(reader)
-    //     .stdout(Stdio::piped())
-    //     .args([
-    // "-i",
-    // "-",
-    // "-f",
-    // "s16le",
-    // "-ac",
-    // "2",
-    // "-ar",
-    // "48000",
-    // "-acodec",
-    // "pcm_s16le",
-    // "-",
-    //     ])
-    //     .spawn();
-    // let decoder = codec::decoder::find_by_name("mp3");
-    // println!("{:?}", decoder);
-    // let input = songbird::input::Input::new;
     let decoder = rodio::Decoder::new_mp3(source).unwrap();
     let source = RodioMediaSource { decoder };
     let reader = Reader::Extension(Box::new(source));

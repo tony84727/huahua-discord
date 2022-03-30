@@ -40,7 +40,7 @@ async fn try_join_channel(ctx: &Context, msg: &Message, channel_id: Option<Chann
 }
 
 async fn try_parse_voice_channel_id(ctx: &Context, id: &str) -> Option<ChannelId> {
-    let channel_id = match ChannelId::from_str(ctx, &id).await {
+    let channel_id = match ChannelId::from_str(ctx, &id) {
         Ok(id) => id,
         Err(_) => {
             return None;
@@ -129,7 +129,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             return Ok(());
         }
     };
-    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
     let play_result = try_play_ytdl(ctx, msg, &url, guild_id).await;
     match play_result {
@@ -206,7 +206,6 @@ async fn join_channel(
 async fn find_voice_channel_of_user(ctx: &Context, msg: &Message) -> Option<(GuildId, ChannelId)> {
     let channel_id = match msg
         .guild(&ctx.cache)
-        .await
         .unwrap()
         .voice_states
         .get(&msg.author.id)

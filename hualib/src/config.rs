@@ -6,9 +6,30 @@ use tokio::{
     io::{self, AsyncReadExt},
 };
 
+fn localhost() -> String {
+    "localhost".to_string()
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Database {
+    pub user: String,
+    pub password: String,
+    #[serde(default = "localhost")]
+    pub host: String,
+}
+
+impl Database {
+    pub fn connection_string(&self) -> String {
+        format!("mongodb://{}:{}@{}", self.user, self.password, self.host)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Bot {
     pub token: String,
+    pub guild_id: u64,
+    pub application_id: u64,
+    pub database: Database,
 }
 
 #[derive(Debug)]

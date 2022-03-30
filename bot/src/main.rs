@@ -1,27 +1,28 @@
-use async_trait::async_trait;
-use serenity::client::{Client, EventHandler};
+use mongodb::Client as MongodbClient;
+use serenity::client::Client;
 use serenity::framework::StandardFramework;
 use songbird::SerenityInit;
 
+use hualib::bot::Handler;
 use hualib::config;
 use hualib::music::MUSIC_GROUP;
-
-struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {}
 
 #[tokio::main]
 async fn main() {
     env_logger::Builder::from_default_env()
-        .filter_module("huahua_discord", log::LevelFilter::Info)
+        .filter_module("hualib", log::LevelFilter::Debug)
         .init();
     let bot_config = config::Bot::load().await.expect("fail to load bot config");
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
         .group(&MUSIC_GROUP);
+    let mongo_client = MongodbClient::with_uri_str(bot_config.database.connection_string())
+        .await
+        .expect("initializing mongodb client");
+    let database = mongo_client.database("huahua");
     let mut client = Client::builder(bot_config.token)
-        .event_handler(Handler)
+        .event_handler(Handler::new(database))
+        .application_id(bot_config.application_id)
         .framework(framework)
         .register_songbird()
         .await
