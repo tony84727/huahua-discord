@@ -1,6 +1,7 @@
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 use serenity::model::id::UserId;
+use serenity::prelude::TypeMapKey;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{self, Read};
@@ -260,4 +261,10 @@ where
     pub async fn confirm_create(&self, preview: PreviewingFx) -> Result<(), RepositoryAddError> {
         self.repository.add(preview.fx).await
     }
+}
+
+pub struct FxController;
+
+impl TypeMapKey for FxController {
+    type Value = Controller<YoutubeDLCreator, LocalStore, MongoDBRepository>;
 }

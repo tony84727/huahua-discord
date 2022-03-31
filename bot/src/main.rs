@@ -5,6 +5,7 @@ use songbird::SerenityInit;
 
 use hualib::bot::Handler;
 use hualib::config;
+use hualib::fx;
 use hualib::music::MUSIC_GROUP;
 
 #[tokio::main]
@@ -20,9 +21,15 @@ async fn main() {
         .await
         .expect("initializing mongodb client");
     let database = mongo_client.database("huahua");
+    let fx_controller = fx::Controller::new(
+        fx::YoutubeDLCreator,
+        fx::LocalStore::new("fx"),
+        fx::MongoDBRepository::new(database.clone()),
+    );
     let mut client = Client::builder(bot_config.token)
         .event_handler(Handler::new(database))
         .application_id(bot_config.application_id)
+        .type_map_insert::<fx::FxController>(fx_controller)
         .framework(framework)
         .register_songbird()
         .await

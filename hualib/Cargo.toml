@@ -24,3 +24,7 @@ features = ["voice", "unstable_discord_api"]
 [dependencies.songbird]
 git = "https://github.com/serenity-rs/songbird.git"
 branch="next"
+
+[dependencies.poise]
+git = "https://github.com/kangalioo/poise.git"
+branch = "master"
