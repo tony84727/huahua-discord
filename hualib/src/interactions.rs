@@ -16,7 +16,7 @@ use serenity::{
     },
     utils::Colour,
 };
-use std::{borrow::Cow, time::Duration};
+use std::{borrow::Cow, boxed::Box, time::Duration};
 
 #[async_trait]
 pub(crate) trait ChatCommand {
@@ -54,42 +54,49 @@ where
         command: &'c mut CreateApplicationCommand,
     ) -> &'c mut CreateApplicationCommand {
         command
-            .name("newfx")
-            .description("創造音效指令")
+            .name("fx")
+            .description("音效指令")
             .create_option(|option| {
                 option
-                    .name("名稱")
-                    .description("音效指令的名稱")
-                    .kind(ApplicationCommandOptionType::String)
-                    .required(true)
-            })
-            .create_option(|option| {
-                option
-                    .name("描述")
-                    .description("音效指令的描述")
-                    .kind(ApplicationCommandOptionType::String)
-                    .required(true)
-            })
-            .create_option(|option| {
-                option
-                    .name("來源")
-                    .description("填入影片的URL")
-                    .kind(ApplicationCommandOptionType::String)
-                    .required(true)
-            })
-            .create_option(|option| {
-                option
-                    .name("開始秒數")
-                    .description("開始秒數，預設0秒開始")
-                    .kind(ApplicationCommandOptionType::Number)
-            })
-            .create_option(|option| {
-                option
-                    .name("持續秒數")
-                    .description("持續秒數，最大20秒，預設5秒")
-                    .kind(ApplicationCommandOptionType::Number)
-                    .max_int_value(20)
-                    .min_int_value(1)
+                    .name("create")
+                    .description("創立音效指令")
+                    .kind(ApplicationCommandOptionType::SubCommand)
+                    .create_sub_option(|option| {
+                        option
+                            .name("名稱")
+                            .description("音效指令的名稱")
+                            .kind(ApplicationCommandOptionType::String)
+                            .required(true)
+                    })
+                    .create_sub_option(|option| {
+                        option
+                            .name("描述")
+                            .description("音效指令的描述")
+                            .kind(ApplicationCommandOptionType::String)
+                            .required(true)
+                    })
+                    .create_sub_option(|option| {
+                        option
+                            .name("來源")
+                            .description("填入影片的URL")
+                            .kind(ApplicationCommandOptionType::String)
+                            .required(true)
+                    })
+                    .create_sub_option(|option| {
+                        option
+                            .name("開始秒數")
+                            .description("開始秒數，預設0秒開始")
+                            .kind(ApplicationCommandOptionType::Integer)
+                            .min_int_value(0)
+                    })
+                    .create_sub_option(|option| {
+                        option
+                            .name("持續秒數")
+                            .description("持續秒數，最大20秒，預設5秒")
+                            .kind(ApplicationCommandOptionType::Integer)
+                            .max_int_value(20)
+                            .min_int_value(1)
+                    })
             })
     }
     async fn exec(&self, ctx: &Context, command: &ApplicationCommandInteraction) {
@@ -106,14 +113,36 @@ where
             }
             Some(member) => member.user.id,
         };
-        if let Some(fx) = Self::option_fx(author, &command.data.options) {
-            match self.controller.init_create_fx(fx).await {
-                Ok(preview) => {
-                    check_message(Self::post_preview(ctx, command, preview).await);
+        let subcommand = match command
+            .data
+            .options
+            .get(0)
+            .map(|option| option.name.as_str())
+        {
+            Some(name) => name,
+            None => {
+                return;
+            }
+        };
+        match subcommand {
+            "create" => {
+                if let Some(fx) =
+                    Self::option_fx(author, &command.data.options.get(0).unwrap().options)
+                {
+                    match self.controller.init_create_fx(fx).await {
+                        Ok(preview) => {
+                            check_message(Self::post_preview(ctx, command, preview).await);
+                        }
+                        Err(why) => {
+                            log::error!("{:?}", why);
+                        }
+                    }
+                } else {
+                    check_message(Self::post_invalid(ctx, command).await);
                 }
-                Err(why) => {
-                    log::error!("{:?}", why);
-                }
+            }
+            x => {
+                log::error!("receving unsupported subcommand: `fx {}`", x)
             }
         }
     }
@@ -156,6 +185,17 @@ where
                     data,
                     filename: format!("preview_{}.mp3", preview.fx.name),
                 })
+            })
+            .await
+    }
+
+    async fn post_invalid(
+        ctx: &Context,
+        interaction: &ApplicationCommandInteraction,
+    ) -> serenity::Result<Message> {
+        interaction
+            .create_followup_message(ctx, |response| {
+                response.content("本毛Don't know WTF are you talking about. 喵!")
             })
             .await
     }

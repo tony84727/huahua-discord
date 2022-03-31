@@ -59,7 +59,7 @@ where
                     command_interaction.data.name
                 );
                 match command_interaction.data.name.as_str() {
-                    "newfx" => {
+                    "fx" => {
                         log::info!("newfx invoked");
                         let command = CreateFxCommand::new(&self.controller);
                         command.exec(&ctx, &command_interaction).await;
