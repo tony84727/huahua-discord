@@ -39,15 +39,33 @@ pub struct Tapped {
     tap_id: u64,
     unregister: Sender<u64>,
     current_slice: Option<Cursor<Vec<u8>>>,
-    receiver: Receiver<Vec<u8>>,
+    receiver: Option<Receiver<Vec<u8>>>,
 }
 
 impl Tapped {
-    fn read_slice(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let slice = self.current_slice.as_mut().unwrap();
-        let result = slice.read(buf);
+    fn read_next_slice(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self
+            .receiver
+            .as_mut()
+            .and_then(|receiver| receiver.recv().ok())
+        {
+            Some(slice) => {
+                let mut slice = Cursor::new(slice);
+                let result = slice.read(buf);
+                self.current_slice = Some(slice);
+                result
+            }
+            None => {
+                self.receiver = None;
+                Ok(0)
+            }
+        }
+    }
+
+    fn read_current_slice(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let result = self.current_slice.as_mut().unwrap().read(buf);
         if let Ok(0) = result {
-            self.current_slice = None;
+            return self.read_next_slice(buf);
         }
         result
     }
@@ -61,17 +79,11 @@ impl Drop for Tapped {
 
 impl Read for Tapped {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if let None = self.current_slice {
-            let buffer = match self.receiver.recv() {
-                Ok(buffer) => buffer,
-                Err(_) => {
-                    return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
-                }
-            };
-            let cursor = Cursor::new(buffer);
-            self.current_slice = Some(cursor);
+        if self.current_slice.is_none() {
+            self.read_next_slice(buf)
+        } else {
+            self.read_current_slice(buf)
         }
-        self.read_slice(buf)
     }
 }
 
@@ -101,7 +113,7 @@ impl<R: Read> TappableReader<R> {
         Tapped {
             current_slice: None,
             tap_id,
-            receiver,
+            receiver: Some(receiver),
             unregister: self.shutdown_sender.clone(),
         }
     }
