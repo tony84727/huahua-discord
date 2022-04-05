@@ -216,9 +216,15 @@ where
                         component.create_action_row(|row| {
                             row.create_button(|button| {
                                 button
-                                    .style(ButtonStyle::Success)
-                                    .label("Add")
-                                    .custom_id("create_123")
+                                    .style(ButtonStyle::Primary)
+                                    .label("新增")
+                                    .custom_id(format!("{}:create", interaction.id))
+                            })
+                            .create_button(|button| {
+                                button
+                                    .style(ButtonStyle::Secondary)
+                                    .label("取消")
+                                    .custom_id(format!("{}:cancel", interaction.id))
                             })
                         })
                     })
