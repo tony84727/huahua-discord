@@ -1,7 +1,8 @@
 use songbird::input::{reader::MediaSource, Codec, Container, Input, Reader};
 use std::io::{Read, Seek, SeekFrom};
 
-fn mp3_to_songbird_input<R: Read + Seek + Send + 'static>(source: R) -> Input {
+#[allow(dead_code)]
+fn mp3_to_songbird_input<R: Read + Seek + Send + Sync + 'static>(source: R) -> Input {
     let decoder = rodio::Decoder::new_mp3(source).unwrap();
     let source = RodioMediaSource { decoder };
     let reader = Reader::Extension(Box::new(source));
@@ -10,27 +11,27 @@ fn mp3_to_songbird_input<R: Read + Seek + Send + 'static>(source: R) -> Input {
 
 struct RodioMediaSource<R>
 where
-    R: Read + Seek + Send,
+    R: Read + Seek + Send + Sync,
 {
     decoder: rodio::Decoder<R>,
 }
 
 impl<R> MediaSource for RodioMediaSource<R>
 where
-    R: Read + Seek + Send,
+    R: Read + Seek + Send + Sync,
 {
     fn is_seekable(&self) -> bool {
         true
     }
 
-    fn len(&self) -> Option<u64> {
+    fn byte_len(&self) -> Option<u64> {
         None
     }
 }
 
 impl<R> Seek for RodioMediaSource<R>
 where
-    R: Read + Seek + Send,
+    R: Read + Seek + Send + Sync,
 {
     fn seek(&mut self, _pos: SeekFrom) -> std::io::Result<u64> {
         Err(std::io::Error::new(
@@ -42,7 +43,7 @@ where
 
 impl<R> Read for RodioMediaSource<R>
 where
-    R: Read + Seek + Send,
+    R: Read + Seek + Send + Sync,
 {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let sample_count = buf.len() / 2;

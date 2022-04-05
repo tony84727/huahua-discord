@@ -8,24 +8,24 @@ use serenity::{
 };
 
 use crate::{
-    fx::{self, Creator, LocalStore, MongoDBRepository, Repository, Store, YoutubeDLCreator},
+    fx::{
+        self, CachedCreator, Creator, LocalStore, MongoDBRepository, Repository, YoutubeDLCreator,
+    },
     interactions::{ChatCommand, CreateFxCommand},
 };
-pub struct Handler<C, S, R>
+pub struct Handler<C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
-    controller: fx::Controller<C, S, R>,
+    controller: fx::Controller<C, R>,
     database: Database,
 }
 
 #[async_trait]
-impl<C, S, R> EventHandler for Handler<C, S, R>
+impl<C, R> EventHandler for Handler<C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
     async fn ready(&self, ctx: Context, _ready: Ready) {
@@ -72,10 +72,9 @@ where
     }
 }
 
-impl<C, S, R> Handler<C, S, R>
+impl<C, R> Handler<C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
     async fn get_existing_guild_ids(&self) -> mongodb::error::Result<Vec<GuildId>> {
@@ -106,11 +105,14 @@ where
     }
 }
 
-impl Handler<YoutubeDLCreator, LocalStore, MongoDBRepository> {
+impl Handler<CachedCreator<YoutubeDLCreator, LocalStore>, MongoDBRepository> {
     pub fn new(database: mongodb::Database) -> Self {
         let store = fx::LocalStore::new("fx");
         let repository = fx::MongoDBRepository::new(database.clone());
-        let controller = fx::Controller::new(fx::YoutubeDLCreator, store, repository);
+        let controller = fx::Controller::new(
+            fx::CachedCreator::new(fx::YoutubeDLCreator, store),
+            repository,
+        );
         Self {
             database,
             controller,

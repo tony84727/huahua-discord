@@ -1,15 +1,21 @@
+use chrono::serde::ts_seconds::{deserialize as from_ts, serialize as to_ts};
+use chrono::{DateTime, Utc};
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
-use serenity::model::id::UserId;
+use serenity::model::id::{GuildId, InteractionId, UserId};
+use serenity::model::interactions::application_command::ApplicationCommandInteraction;
+use songbird::input::ChildContainer;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+
+use crate::ioutils::TappableReader;
 
 #[derive(Debug)]
 pub enum StoreGetError {
@@ -59,7 +65,7 @@ impl Store for LocalStore {
         if exists {
             return Err(StorePutError::AlreadyExist);
         }
-        let mut file = File::open(file).map_err(StorePutError::IO)?;
+        let mut file = File::create(file).map_err(StorePutError::IO)?;
         std::io::copy(&mut data, &mut file)
             .map(|_| ())
             .map_err(StorePutError::IO)
@@ -97,15 +103,36 @@ impl MediaOrigin {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct DiscordOrigin {
+    pub guild: Option<GuildId>,
+    pub interaction: InteractionId,
+    pub author: Option<UserId>,
+    #[serde(serialize_with = "to_ts", deserialize_with = "from_ts")]
+    pub drafted_at: DateTime<Utc>,
+}
+
+impl From<ApplicationCommandInteraction> for DiscordOrigin {
+    fn from(interaction: ApplicationCommandInteraction) -> Self {
+        Self {
+            guild: interaction.guild_id,
+            interaction: interaction.id,
+            author: interaction.member.map(|member| member.user.id),
+            drafted_at: Utc::now(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Fx {
     pub name: String,
     pub description: String,
-    pub author: UserId,
-    pub origin: MediaOrigin,
+    pub discord: DiscordOrigin,
+    pub media: MediaOrigin,
 }
 
 pub enum RepositoryAddError {
     IO(mongodb::error::Error),
+    AlreadyExists,
 }
 
 pub enum RepositoryGetError {
@@ -115,6 +142,7 @@ pub enum RepositoryGetError {
 
 #[async_trait]
 pub trait Repository: Send + Sync {
+    async fn add_draft(&self, fx: Fx) -> Result<(), RepositoryAddError>;
     async fn add(&self, fx: Fx) -> Result<(), RepositoryAddError>;
     async fn get(&self, name: &str) -> Result<Fx, RepositoryGetError>;
 }
@@ -125,6 +153,14 @@ pub struct MongoDBRepository {
 
 #[async_trait]
 impl Repository for MongoDBRepository {
+    async fn add_draft(&self, fx: Fx) -> Result<(), RepositoryAddError> {
+        self.client
+            .collection("fx_drafts")
+            .insert_one(fx, None)
+            .await
+            .map(|_| ())
+            .map_err(RepositoryAddError::IO)
+    }
     async fn add(&self, fx: Fx) -> Result<(), RepositoryAddError> {
         self.client
             .collection("fx")
@@ -175,7 +211,7 @@ pub struct YoutubeDLCreator;
 
 #[async_trait]
 impl Creator for YoutubeDLCreator {
-    type Output = songbird::input::Reader;
+    type Output = BufReader<ChildContainer>;
     type Error = YoutubeDLCreateError;
 
     async fn create(&self, origin: &MediaOrigin) -> Result<Self::Output, Self::Error> {
@@ -189,9 +225,12 @@ impl Creator for YoutubeDLCreator {
         let ffmpeg = Self::cut(origin, ytdl_out)
             .await
             .map_err(YoutubeDLCreateError::FFmepg)?;
-        Ok(songbird::input::children_to_reader::<u8>(vec![
-            ytdl, ffmpeg,
-        ]))
+        Ok(
+            match songbird::input::children_to_reader::<u8>(vec![ytdl, ffmpeg]) {
+                songbird::input::Reader::Pipe(buf_reader) => buf_reader,
+                _ => panic!("unexpected"),
+            },
+        )
     }
 }
 
@@ -213,47 +252,99 @@ impl YoutubeDLCreator {
     }
 }
 
+#[derive(Debug)]
+pub enum CachedCreatorError<StoreError, CreateError>
+where
+    StoreError: Debug,
+    CreateError: Debug,
+{
+    Cache(StoreError),
+    Create(CreateError),
+}
+
+pub struct CachedCreator<C: Creator, S: Store> {
+    creator: Arc<C>,
+    store: Arc<S>,
+}
+
+#[async_trait]
+impl<C, S> Creator for CachedCreator<C, S>
+where
+    C: Creator,
+    S: Store + 'static,
+    S::Output: Sync + Send + 'static,
+    C::Output: Sync + Send + Unpin + 'static,
+    C::Error: Sync + Send,
+{
+    type Output = Box<dyn Read>;
+
+    type Error = CachedCreatorError<StoreGetError, C::Error>;
+
+    async fn create(&self, origin: &MediaOrigin) -> Result<Self::Output, Self::Error> {
+        let key = origin.cache_key();
+        match self.store.get(&key).await {
+            Ok(media) => Ok(Box::new(media)),
+            Err(StoreGetError::NotFound) => {
+                let output = self
+                    .creator
+                    .create(origin)
+                    .await
+                    .map_err(CachedCreatorError::Create)?;
+                // let to_store = output.clone();
+                // let reader =
+                let mut reader = TappableReader::new(output);
+                let to_store = reader.tap();
+                let store = self.store.clone();
+                tokio::spawn(async move { store.put(&key, to_store).await });
+                Ok(Box::new(reader))
+            }
+            Err(why) => Err(CachedCreatorError::Cache(why)),
+        }
+    }
+}
+
+impl<C, S> CachedCreator<C, S>
+where
+    C: Creator,
+    S: Store,
+{
+    pub fn new(creator: C, store: S) -> Self {
+        Self {
+            creator: Arc::new(creator),
+            store: Arc::new(store),
+        }
+    }
+}
+
 pub struct PreviewingFx {
     pub media: Vec<u8>,
     pub fx: Fx,
 }
 
-pub struct Controller<C, S, R>
+pub struct Controller<C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
     creator: Arc<C>,
-    store: Arc<S>,
     repository: Arc<R>,
 }
 
-impl<C, S, R> Controller<C, S, R>
+impl<C, R> Controller<C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
-    pub fn new(creator: C, store: S, repository: R) -> Self {
+    pub fn new(creator: C, repository: R) -> Self {
         Self {
             creator: Arc::new(creator),
-            store: Arc::new(store),
             repository: Arc::new(repository),
         }
     }
     pub async fn init_create_fx(&self, fx: Fx) -> Result<PreviewingFx, C::Error> {
-        let mut output = self.creator.create(&fx.origin).await?;
+        let mut output = self.creator.create(&fx.media).await?;
         let mut buf = vec![];
         output.read_to_end(&mut buf).unwrap();
-        let store = self.store.clone();
-        let to_store = buf.clone();
-        let key = fx.origin.cache_key();
-        tokio::spawn(async move {
-            if let Err(why) = store.put(&key, &*to_store).await {
-                log::error!("fail to store fx, err: {:?}", why);
-            }
-        });
         Ok(PreviewingFx { fx, media: buf })
     }
 

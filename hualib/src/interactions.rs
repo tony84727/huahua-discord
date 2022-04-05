@@ -1,16 +1,17 @@
-use crate::fx::{Controller, Creator, Fx, MediaOrigin, PreviewingFx, Repository, Store};
+use crate::fx::{Controller, Creator, DiscordOrigin, Fx, MediaOrigin, PreviewingFx, Repository};
 use async_trait::async_trait;
+use rand::{distributions::Uniform, prelude::Distribution};
 use serenity::{
     builder::{CreateApplicationCommand, CreateEmbed},
     client::Context,
     model::{
         channel::{AttachmentType, Message},
-        id::UserId,
         interactions::{
             application_command::{
                 ApplicationCommandInteraction, ApplicationCommandInteractionDataOption,
                 ApplicationCommandInteractionDataOptionValue, ApplicationCommandOptionType,
             },
+            message_component::ButtonStyle,
             InteractionResponseType,
         },
     },
@@ -27,13 +28,12 @@ pub(crate) trait ChatCommand {
     async fn exec(&self, ctx: &Context, interaction: &ApplicationCommandInteraction);
 }
 
-pub(crate) struct CreateFxCommand<'a, C, S, R>
+pub(crate) struct CreateFxCommand<'a, C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
-    controller: &'a Controller<C, S, R>,
+    controller: &'a Controller<C, R>,
 }
 
 fn check_message<R>(result: serenity::Result<R>) {
@@ -43,10 +43,9 @@ fn check_message<R>(result: serenity::Result<R>) {
 }
 
 #[async_trait]
-impl<'a, C, S, R> ChatCommand for CreateFxCommand<'a, C, S, R>
+impl<'a, C, R> ChatCommand for CreateFxCommand<'a, C, R>
 where
     C: Creator,
-    S: Store + 'static,
     R: Repository,
 {
     fn create<'c>(
@@ -107,12 +106,7 @@ where
                 })
                 .await,
         );
-        let author = match &command.member {
-            None => {
-                return;
-            }
-            Some(member) => member.user.id,
-        };
+        let discord_origin: DiscordOrigin = command.clone().into();
         let subcommand = match command
             .data
             .options
@@ -126,9 +120,11 @@ where
         };
         match subcommand {
             "create" => {
-                if let Some(fx) =
-                    Self::option_fx(author, &command.data.options.get(0).unwrap().options)
-                {
+                if let Some(fx) = Self::option_fx(
+                    discord_origin,
+                    &command.data.options.get(0).unwrap().options,
+                ) {
+                    check_message(Self::post_processing(ctx, command).await);
                     match self.controller.init_create_fx(fx).await {
                         Ok(preview) => {
                             check_message(Self::post_preview(ctx, command, preview).await);
@@ -148,14 +144,43 @@ where
     }
 }
 
-impl<'a, C, S, R> CreateFxCommand<'a, C, S, R>
+struct RandomMessage<'m>(&'m [&'static str]);
+
+impl<'m> RandomMessage<'m> {
+    fn new(messages: &'m [&'static str]) -> Self {
+        Self(messages)
+    }
+    fn next(&self) -> &str {
+        let index = self.random_index();
+        self.0.get(index).unwrap()
+    }
+
+    fn random_index(&self) -> usize {
+        let distribution = Uniform::from(0..self.0.len());
+        distribution.sample(&mut rand::thread_rng())
+    }
+}
+
+impl<'a, C, R> CreateFxCommand<'a, C, R>
 where
     C: Creator,
-    S: Store,
     R: Repository,
 {
-    pub(crate) fn new(controller: &'a Controller<C, S, R>) -> Self {
+    pub(crate) fn new(controller: &'a Controller<C, R>) -> Self {
         Self { controller }
+    }
+    async fn post_processing(
+        ctx: &Context,
+        interaction: &ApplicationCommandInteraction,
+    ) -> serenity::Result<Message> {
+        let random_message = RandomMessage::new(&[
+            "喵! 本毛正在處理你的要求，雞肉條在特價噎，你應該知道本毛在說什麼？",
+            "喵! 本毛正在處理你的要求",
+            "喵! 本毛喜歡雞肉條跟罐罐。還有...本毛正在處理你的要求",
+        ]);
+        interaction
+            .create_followup_message(ctx, |message| message.content(random_message.next()))
+            .await
     }
     async fn post_preview(
         ctx: &Context,
@@ -170,21 +195,33 @@ where
                     .colour(Colour::ORANGE)
                     .title(&preview.fx.name)
                     .description(preview.fx.description)
-                    .field("連結", preview.fx.origin.url, false)
+                    .field("連結", preview.fx.media.url, false)
                     .field(
                         "開始秒數",
-                        format!("{}秒", preview.fx.origin.start.as_secs()),
+                        format!("{}秒", preview.fx.media.start.as_secs()),
                         false,
                     )
                     .field(
                         "長度",
-                        format!("{}秒", preview.fx.origin.length.as_secs()),
+                        format!("{}秒", preview.fx.media.length.as_secs()),
                         false,
                     );
-                response.add_embed(embed).add_file(AttachmentType::Bytes {
-                    data,
-                    filename: format!("preview_{}.mp3", preview.fx.name),
-                })
+                response
+                    .add_embed(embed)
+                    .add_file(AttachmentType::Bytes {
+                        data,
+                        filename: format!("preview_{}.mp3", preview.fx.name),
+                    })
+                    .components(|component| {
+                        component.create_action_row(|row| {
+                            row.create_button(|button| {
+                                button
+                                    .style(ButtonStyle::Success)
+                                    .label("Add")
+                                    .custom_id("create_123")
+                            })
+                        })
+                    })
             })
             .await
     }
@@ -200,7 +237,7 @@ where
             .await
     }
     fn option_fx(
-        author: UserId,
+        discord: DiscordOrigin,
         options: &[ApplicationCommandInteractionDataOption],
     ) -> Option<Fx> {
         let start = options
@@ -227,7 +264,7 @@ where
             })
             .unwrap_or(5_u64);
         FxArgument {
-            author,
+            discord,
             name: options
                 .get(0)
                 .and_then(|option| option.resolved.as_ref())
@@ -268,7 +305,7 @@ struct FxArgument {
     url: Option<String>,
     start: u64,
     length: u64,
-    author: UserId,
+    discord: DiscordOrigin,
 }
 
 impl FxArgument {
@@ -277,12 +314,12 @@ impl FxArgument {
             return Some(Fx {
                 name: self.name.unwrap(),
                 description: self.description.unwrap(),
-                origin: MediaOrigin {
+                media: MediaOrigin {
                     url: self.url.unwrap(),
                     start: Duration::from_secs(self.start),
                     length: Duration::from_secs(self.length),
                 },
-                author: self.author,
+                discord: self.discord,
             });
         }
         None
