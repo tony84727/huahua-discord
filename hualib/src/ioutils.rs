@@ -55,7 +55,7 @@ impl Tapped {
 
 impl Drop for Tapped {
     fn drop(&mut self) {
-        self.unregister.send(self.tap_id).unwrap();
+        let _result = self.unregister.send(self.tap_id);
     }
 }
 
