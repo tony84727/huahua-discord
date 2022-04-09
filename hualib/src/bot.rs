@@ -11,7 +11,7 @@ use crate::{
     fx::{
         self, CachedCreator, Creator, LocalStore, MongoDBRepository, Repository, YoutubeDLCreator,
     },
-    interactions::{ChatCommand, CreateFxCommand},
+    interactions::create_fx::{ChatCommand, CreateFxCommand},
 };
 pub struct Handler<C, R>
 where
