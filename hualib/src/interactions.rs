@@ -1,6 +1,11 @@
 use crate::fx::{Controller, Creator, DiscordOrigin, Fx, MediaOrigin, PreviewingFx, Repository};
 use async_trait::async_trait;
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{doc, Bson};
+use mongodb::error::Result as MongoDBResult;
 use rand::{distributions::Uniform, prelude::Distribution};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serenity::{
     builder::{CreateApplicationCommand, CreateEmbed},
     client::Context,
@@ -34,6 +39,7 @@ where
     R: Repository,
 {
     controller: &'a Controller<C, R>,
+    interaction_data: InteractionDataRegistry,
 }
 
 fn check_message<R>(result: serenity::Result<R>) {
@@ -166,8 +172,14 @@ where
     C: Creator,
     R: Repository,
 {
-    pub(crate) fn new(controller: &'a Controller<C, R>) -> Self {
-        Self { controller }
+    pub(crate) fn new(
+        controller: &'a Controller<C, R>,
+        interaction_data: InteractionDataRegistry,
+    ) -> Self {
+        Self {
+            controller,
+            interaction_data,
+        }
     }
     async fn post_processing(
         ctx: &Context,
@@ -329,5 +341,43 @@ impl FxArgument {
             });
         }
         None
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct InteractionEntry<D> {
+    data: D,
+}
+
+impl<D> InteractionEntry<D> {
+    pub fn new(data: D) -> Self {
+        Self { data }
+    }
+}
+
+pub struct InteractionDataRegistry {
+    database: mongodb::Database,
+}
+
+impl InteractionDataRegistry {
+    pub fn new(database: mongodb::Database) -> Self {
+        Self { database }
+    }
+    pub async fn create<D: Serialize + DeserializeOwned>(&self, data: D) -> MongoDBResult<Bson> {
+        self.database
+            .collection("interaction_data")
+            .insert_one(InteractionEntry::new(data), None)
+            .await
+            .map(|result| result.inserted_id)
+    }
+
+    pub async fn get<D: Serialize + DeserializeOwned + Send + Sync + Unpin>(
+        &self,
+        id: ObjectId,
+    ) -> MongoDBResult<Option<D>> {
+        self.database
+            .collection("interaction_data")
+            .find_one(doc! {"_id": id}, None)
+            .await
     }
 }

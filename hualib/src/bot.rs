@@ -11,7 +11,7 @@ use crate::{
     fx::{
         self, CachedCreator, Creator, LocalStore, MongoDBRepository, Repository, YoutubeDLCreator,
     },
-    interactions::{ChatCommand, CreateFxCommand},
+    interactions::{ChatCommand, CreateFxCommand, InteractionDataRegistry},
 };
 pub struct Handler<C, R>
 where
@@ -30,7 +30,10 @@ where
 {
     async fn ready(&self, ctx: Context, _ready: Ready) {
         let guilds = self.get_existing_guild_ids().await.unwrap();
-        let command = CreateFxCommand::new(&self.controller);
+        let command = CreateFxCommand::new(
+            &self.controller,
+            InteractionDataRegistry::new(self.database.clone()),
+        );
         for guild in guilds {
             match guild
                 .create_application_command(&ctx, |commands| command.create(commands))
@@ -61,7 +64,10 @@ where
                 match command_interaction.data.name.as_str() {
                     "fx" => {
                         log::info!("newfx invoked");
-                        let command = CreateFxCommand::new(&self.controller);
+                        let command = CreateFxCommand::new(
+                            &self.controller,
+                            InteractionDataRegistry::new(self.database.clone()),
+                        );
                         command.exec(&ctx, &command_interaction).await;
                     }
                     _ => (),
