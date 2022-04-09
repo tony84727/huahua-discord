@@ -1,10 +1,10 @@
 use crate::fx::{Controller, Creator, DiscordOrigin, Fx, MediaOrigin, PreviewingFx, Repository};
 use async_trait::async_trait;
+use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{doc, Bson};
 use mongodb::error::Result as MongoDBResult;
+use mongodb::results::{DeleteResult, InsertOneResult};
 use rand::{distributions::Uniform, prelude::Distribution};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serenity::{
     builder::{CreateApplicationCommand, CreateEmbed},
@@ -39,7 +39,6 @@ where
     R: Repository,
 {
     controller: &'a Controller<C, R>,
-    interaction_data: InteractionDataRegistry,
 }
 
 fn check_message<R>(result: serenity::Result<R>) {
@@ -172,14 +171,8 @@ where
     C: Creator,
     R: Repository,
 {
-    pub(crate) fn new(
-        controller: &'a Controller<C, R>,
-        interaction_data: InteractionDataRegistry,
-    ) -> Self {
-        Self {
-            controller,
-            interaction_data,
-        }
+    pub(crate) fn new(controller: &'a Controller<C, R>) -> Self {
+        Self { controller }
     }
     async fn post_processing(
         ctx: &Context,
@@ -344,15 +337,11 @@ impl FxArgument {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct InteractionEntry<D> {
-    data: D,
-}
+const INTERACTION_DATA_COLLECTION: &str = "interaction_data";
 
-impl<D> InteractionEntry<D> {
-    pub fn new(data: D) -> Self {
-        Self { data }
-    }
+#[derive(Serialize, Deserialize)]
+pub enum InteractionData {
+    CreatingFx(Fx),
 }
 
 pub struct InteractionDataRegistry {
@@ -363,21 +352,24 @@ impl InteractionDataRegistry {
     pub fn new(database: mongodb::Database) -> Self {
         Self { database }
     }
-    pub async fn create<D: Serialize + DeserializeOwned>(&self, data: D) -> MongoDBResult<Bson> {
+    pub async fn create(&self, data: InteractionData) -> MongoDBResult<InsertOneResult> {
         self.database
-            .collection("interaction_data")
-            .insert_one(InteractionEntry::new(data), None)
+            .collection(INTERACTION_DATA_COLLECTION)
+            .insert_one(data, None)
             .await
-            .map(|result| result.inserted_id)
     }
 
-    pub async fn get<D: Serialize + DeserializeOwned + Send + Sync + Unpin>(
-        &self,
-        id: ObjectId,
-    ) -> MongoDBResult<Option<D>> {
+    pub async fn get(&self, id: ObjectId) -> MongoDBResult<Option<InteractionData>> {
         self.database
-            .collection("interaction_data")
+            .collection(INTERACTION_DATA_COLLECTION)
             .find_one(doc! {"_id": id}, None)
+            .await
+    }
+
+    pub async fn delete(&self, id: ObjectId) -> MongoDBResult<DeleteResult> {
+        self.database
+            .collection::<InteractionData>(INTERACTION_DATA_COLLECTION)
+            .delete_one(doc! {"_id": id}, None)
             .await
     }
 }
