@@ -14,6 +14,8 @@ use serenity::{
 };
 use songbird::input::Input;
 
+use crate::discord::check_msg;
+
 #[group]
 #[commands(join, play, stop, tbc, pwtf)]
 struct Music;
@@ -181,12 +183,6 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
         check_msg(msg.reply(ctx, "本毛沒在唱").await)
     }
     Ok(())
-}
-
-fn check_msg(result: serenity::Result<Message>) {
-    if let Err(err) = result {
-        log::error!("error sending message: {:?}", err);
-    }
 }
 
 async fn join_channel(

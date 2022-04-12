@@ -20,6 +20,7 @@ async fn main() {
     let mongo_client = MongodbClient::with_uri_str(bot_config.database.connection_string())
         .await
         .expect("initializing mongodb client");
+        
     let database = mongo_client.database("huahua");
     let mut client = Client::builder(bot_config.token)
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)

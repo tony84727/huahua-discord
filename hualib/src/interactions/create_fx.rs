@@ -20,6 +20,8 @@ use serenity::{
 };
 use std::{borrow::Cow, boxed::Box, time::Duration};
 
+use super::data::{InteractionData, InteractionDataRegistry};
+
 #[async_trait]
 pub(crate) trait ChatCommand {
     fn create<'c>(
@@ -35,6 +37,7 @@ where
     R: Repository,
 {
     controller: &'a Controller<C, R>,
+    data: &'a InteractionDataRegistry,
 }
 
 fn check_message<R>(result: serenity::Result<R>) {
@@ -127,9 +130,12 @@ where
                 ) {
                     check_message(Self::post_processing(ctx, command).await);
                     match self.controller.init_create_fx(fx).await {
-                        Ok(preview) => {
-                            check_message(Self::post_preview(ctx, command, preview).await);
-                        }
+                        Ok(preview) => match self.post_preview(ctx, command, preview).await {
+                            Ok(_) => (),
+                            Err(why) => {
+                                log::error!("{:?}", why);
+                            }
+                        },
                         Err(why) => {
                             log::error!("{:?}", why);
                         }
@@ -143,6 +149,12 @@ where
             }
         }
     }
+}
+
+#[derive(Debug)]
+enum CreateFxError {
+    Serenity(serenity::Error),
+    Data(mongodb::error::Error),
 }
 
 struct RandomMessage<'m>(&'m [&'static str]);
@@ -167,8 +179,8 @@ where
     C: Creator,
     R: Repository,
 {
-    pub(crate) fn new(controller: &'a Controller<C, R>) -> Self {
-        Self { controller }
+    pub(crate) fn new(controller: &'a Controller<C, R>, data: &'a InteractionDataRegistry) -> Self {
+        Self { controller, data }
     }
     async fn post_processing(
         ctx: &Context,
@@ -184,11 +196,18 @@ where
             .await
     }
     async fn post_preview(
+        &self,
         ctx: &Context,
         interaction: &ApplicationCommandInteraction,
         preview: PreviewingFx,
-    ) -> serenity::Result<Message> {
+    ) -> Result<Message, CreateFxError> {
         let data = Cow::Borrowed(preview.media.as_slice());
+        let create_data_result = self
+            .data
+            .create(InteractionData::CreatingFx(preview.fx.clone()))
+            .await
+            .map_err(CreateFxError::Data)?;
+        let id = create_data_result.inserted_id.as_object_id().unwrap();
         interaction
             .create_followup_message(ctx, |response| {
                 let mut embed = CreateEmbed::default();
@@ -219,18 +238,19 @@ where
                                 button
                                     .style(ButtonStyle::Primary)
                                     .label("新增")
-                                    .custom_id(format!("{}:create", interaction.id))
+                                    .custom_id(format!("{}:create", id.to_hex()))
                             })
                             .create_button(|button| {
                                 button
                                     .style(ButtonStyle::Secondary)
                                     .label("取消")
-                                    .custom_id(format!("{}:cancel", interaction.id))
+                                    .custom_id(format!("{}:cancel", id.to_hex()))
                             })
                         })
                     })
             })
             .await
+            .map_err(CreateFxError::Serenity)
     }
 
     async fn post_invalid(

@@ -85,7 +85,7 @@ impl LocalStore {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MediaOrigin {
     pub url: String,
     pub start: Duration,
@@ -102,7 +102,7 @@ impl MediaOrigin {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DiscordOrigin {
     pub guild: Option<GuildId>,
     pub interaction: InteractionId,
@@ -122,7 +122,7 @@ impl From<ApplicationCommandInteraction> for DiscordOrigin {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Fx {
     pub name: String,
     pub description: String,
@@ -130,6 +130,7 @@ pub struct Fx {
     pub media: MediaOrigin,
 }
 
+#[derive(Debug)]
 pub enum RepositoryAddError {
     IO(mongodb::error::Error),
     AlreadyExists,
@@ -348,7 +349,7 @@ where
         Ok(PreviewingFx { fx, media: buf })
     }
 
-    pub async fn confirm_create(&self, preview: PreviewingFx) -> Result<(), RepositoryAddError> {
-        self.repository.add(preview.fx).await
+    pub async fn confirm_create(&self, fx: Fx) -> Result<(), RepositoryAddError> {
+        self.repository.add(fx).await
     }
 }
