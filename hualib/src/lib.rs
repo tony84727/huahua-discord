@@ -1,8 +1,8 @@
-pub mod audio;
+mod audio;
 pub mod bot;
 pub mod config;
-pub mod db;
+mod discord;
 pub mod fx;
-pub mod interactions;
-pub mod ioutils;
+mod interactions;
+mod ioutils;
 pub mod music;

@@ -1,13 +1,14 @@
 use crate::fx::Fx;
-use mongodb::bson::doc;
-use mongodb::bson::oid::ObjectId;
-use mongodb::error::Result as MongoDBResult;
-use mongodb::results::{DeleteResult, InsertOneResult};
+use mongodb::{
+    bson::{doc, oid::ObjectId},
+    error::Result as MongoDBResult,
+    options::FindOneOptions,
+    results::{DeleteResult, InsertOneResult},
+};
 use serde::{Deserialize, Serialize};
-
 const INTERACTION_DATA_COLLECTION: &str = "interaction_data";
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum InteractionData {
     CreatingFx(Fx),
 }
@@ -28,16 +29,17 @@ impl InteractionDataRegistry {
     }
 
     pub async fn get(&self, id: ObjectId) -> MongoDBResult<Option<InteractionData>> {
+        let find = FindOneOptions::builder().show_record_id(false).build();
         self.database
             .collection(INTERACTION_DATA_COLLECTION)
-            .find_one(doc! {"_id": id}, None)
+            .find_one(doc! {"id": id}, Some(find))
             .await
     }
 
     pub async fn delete(&self, id: ObjectId) -> MongoDBResult<DeleteResult> {
         self.database
             .collection::<InteractionData>(INTERACTION_DATA_COLLECTION)
-            .delete_one(doc! {"_id": id}, None)
+            .delete_one(doc! {"id": id}, None)
             .await
     }
 }

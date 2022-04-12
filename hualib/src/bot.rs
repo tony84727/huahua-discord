@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use futures::StreamExt;
-use mongodb::Database;
 use serde::{Deserialize, Serialize};
 use serenity::{
     client::{Context, EventHandler},
@@ -11,7 +10,11 @@ use crate::{
     fx::{
         self, CachedCreator, Creator, LocalStore, MongoDBRepository, Repository, YoutubeDLCreator,
     },
-    interactions::create_fx::{ChatCommand, CreateFxCommand},
+    interactions::{
+        create_fx::{ChatCommand, CreateFxCommand},
+        data::InteractionDataRegistry,
+        ButtonHandler,
+    },
 };
 pub struct Handler<C, R>
 where
@@ -19,7 +22,8 @@ where
     R: Repository,
 {
     controller: fx::Controller<C, R>,
-    database: Database,
+    database: mongodb::Database,
+    interaction_data_registry: InteractionDataRegistry,
 }
 
 #[async_trait]
@@ -30,7 +34,7 @@ where
 {
     async fn ready(&self, ctx: Context, _ready: Ready) {
         let guilds = self.get_existing_guild_ids().await.unwrap();
-        let command = CreateFxCommand::new(&self.controller);
+        let command = CreateFxCommand::new(&self.controller, &self.interaction_data_registry);
         for guild in guilds {
             match guild
                 .create_application_command(&ctx, |commands| command.create(commands))
@@ -61,11 +65,16 @@ where
                 match command_interaction.data.name.as_str() {
                     "fx" => {
                         log::info!("newfx invoked");
-                        let command = CreateFxCommand::new(&self.controller);
+                        let command =
+                            CreateFxCommand::new(&self.controller, &self.interaction_data_registry);
                         command.exec(&ctx, &command_interaction).await;
                     }
                     _ => (),
                 }
+            }
+            Interaction::MessageComponent(component_interaction) => {
+                let handler = ButtonHandler::new(&self.controller, self.database.clone());
+                handler.handle(&ctx, &component_interaction).await;
             }
             _ => (),
         }
@@ -113,9 +122,11 @@ impl Handler<CachedCreator<YoutubeDLCreator, LocalStore>, MongoDBRepository> {
             fx::CachedCreator::new(fx::YoutubeDLCreator, store),
             repository,
         );
+        let interaction_data_registry = InteractionDataRegistry::new(database.clone());
         Self {
-            database,
             controller,
+            database,
+            interaction_data_registry,
         }
     }
 }

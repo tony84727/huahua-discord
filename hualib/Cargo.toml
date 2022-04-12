@@ -29,3 +29,4 @@ branch="next"
 
 [dev-dependencies]
 bytes = "1.1.0"
+test-case = "2.0.2"
