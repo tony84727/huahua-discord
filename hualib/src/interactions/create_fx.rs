@@ -1,6 +1,4 @@
 use crate::fx::{Controller, Creator, DiscordOrigin, Fx, MediaOrigin, PreviewingFx, Repository};
-use async_trait::async_trait;
-
 use rand::{distributions::Uniform, prelude::Distribution};
 use serenity::{
     builder::{CreateApplicationCommand, CreateEmbed},
@@ -18,18 +16,9 @@ use serenity::{
     },
     utils::Colour,
 };
-use std::{borrow::Cow, boxed::Box, time::Duration};
+use std::{borrow::Cow, time::Duration};
 
 use super::data::{InteractionData, InteractionDataRegistry};
-
-#[async_trait]
-pub(crate) trait ChatCommand {
-    fn create<'c>(
-        &self,
-        command: &'c mut CreateApplicationCommand,
-    ) -> &'c mut CreateApplicationCommand;
-    async fn exec(&self, ctx: &Context, interaction: &ApplicationCommandInteraction);
-}
 
 pub(crate) struct CreateFxCommand<'a, C, R>
 where
@@ -46,13 +35,12 @@ fn check_message<R>(result: serenity::Result<R>) {
     }
 }
 
-#[async_trait]
-impl<'a, C, R> ChatCommand for CreateFxCommand<'a, C, R>
+impl<'a, C, R> CreateFxCommand<'a, C, R>
 where
     C: Creator,
     R: Repository,
 {
-    fn create<'c>(
+    pub fn create<'c>(
         &self,
         command: &'c mut CreateApplicationCommand,
     ) -> &'c mut CreateApplicationCommand {
@@ -102,7 +90,7 @@ where
                     })
             })
     }
-    async fn exec(&self, ctx: &Context, command: &ApplicationCommandInteraction) {
+    pub async fn exec(&self, ctx: &Context, command: &ApplicationCommandInteraction) {
         check_message(
             command
                 .create_interaction_response(ctx, |response| {

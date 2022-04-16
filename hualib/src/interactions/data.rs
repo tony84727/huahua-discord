@@ -2,7 +2,7 @@ use crate::fx::Fx;
 use mongodb::{
     bson::{doc, oid::ObjectId},
     error::Result as MongoDBResult,
-    results::{DeleteResult, InsertOneResult},
+    results::InsertOneResult,
 };
 use serde::{Deserialize, Serialize};
 const INTERACTION_DATA_COLLECTION: &str = "interaction_data";
@@ -41,12 +41,5 @@ impl InteractionDataRegistry {
             .find_one(doc! {"id": id}, None)
             .await
             .map(|option| option.map(|WithID { data, .. }| data))
-    }
-
-    pub async fn delete(&self, id: ObjectId) -> MongoDBResult<DeleteResult> {
-        self.database
-            .collection::<InteractionData>(INTERACTION_DATA_COLLECTION)
-            .delete_one(doc! {"_id": id}, None)
-            .await
     }
 }

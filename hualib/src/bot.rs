@@ -10,11 +10,7 @@ use crate::{
     fx::{
         self, CachedCreator, Creator, LocalStore, MongoDBRepository, Repository, YoutubeDLCreator,
     },
-    interactions::{
-        create_fx::{ChatCommand, CreateFxCommand},
-        data::InteractionDataRegistry,
-        ButtonHandler,
-    },
+    interactions::{create_fx::CreateFxCommand, data::InteractionDataRegistry, ButtonHandler},
 };
 pub struct Handler<C, R>
 where
