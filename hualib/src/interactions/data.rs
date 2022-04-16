@@ -16,6 +16,14 @@ pub struct InteractionDataRegistry {
     database: mongodb::Database,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WithID<T> {
+    #[serde(rename = "_id")]
+    id: ObjectId,
+    #[serde(flatten)]
+    data: T,
+}
+
 impl InteractionDataRegistry {
     pub fn new(database: mongodb::Database) -> Self {
         Self { database }
@@ -29,9 +37,10 @@ impl InteractionDataRegistry {
 
     pub async fn get(&self, id: ObjectId) -> MongoDBResult<Option<InteractionData>> {
         self.database
-            .collection(INTERACTION_DATA_COLLECTION)
+            .collection::<WithID<InteractionData>>(INTERACTION_DATA_COLLECTION)
             .find_one(doc! {"id": id}, None)
             .await
+            .map(|option| option.map(|WithID { data, .. }| data))
     }
 
     pub async fn delete(&self, id: ObjectId) -> MongoDBResult<DeleteResult> {
