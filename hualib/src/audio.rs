@@ -158,11 +158,7 @@ pub enum PlayError {
     CannotPlay,
 }
 
-pub async fn try_play_source(
-    ctx: &Context,
-    guild_id: GuildId,
-    source: Input,
-) -> Result<(), PlayError> {
+async fn try_play_source(ctx: &Context, guild_id: GuildId, source: Input) -> Result<(), PlayError> {
     let manager = songbird::get(ctx).await.unwrap();
     match manager.get(guild_id) {
         Some(handler_lock) => {
@@ -204,4 +200,15 @@ pub async fn try_play_file<P: AsRef<OsStr> + Debug>(
         }
     };
     try_play_source(ctx, guild_id, source).await
+}
+
+pub async fn stop_for_guild(ctx: &Context, guild_id: GuildId) {
+    let manager = songbird::get(ctx).await.expect("cannot get songbird");
+    if let Some(call) = manager.get(guild_id) {
+        call.lock().await.stop()
+    }
+}
+
+pub async fn ensure_join_voice(ctx: &Context, msg: &Message) {
+    try_join_channel(ctx, msg, None).await;
 }

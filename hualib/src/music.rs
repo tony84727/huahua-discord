@@ -1,6 +1,7 @@
 use crate::{
     audio::{
-        try_join_channel, try_parse_voice_channel_id, try_play_file, try_play_ytdl, PlayError,
+        ensure_join_voice, stop_for_guild, try_join_channel, try_parse_voice_channel_id,
+        try_play_file, try_play_ytdl, PlayError,
     },
     discord::check_msg,
 };
@@ -52,9 +53,9 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 
 #[command]
 async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
+    ensure_join_voice(ctx, msg).await;
     match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3").await {
         Err(err) if err == PlayError::NotInChannel => {
-            try_join_channel(ctx, msg, None).await;
             try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3")
                 .await
                 .unwrap();
@@ -66,9 +67,9 @@ async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
+    ensure_join_voice(ctx, msg).await;
     match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3").await {
         Err(err) if err == PlayError::NotInChannel => {
-            try_join_channel(ctx, msg, None).await;
             try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3")
                 .await
                 .unwrap();
@@ -81,12 +82,6 @@ async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
     let guild_id = msg.guild_id.unwrap();
-    let manager = songbird::get(ctx).await.unwrap();
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        handler.leave().await.unwrap();
-    } else {
-        check_msg(msg.reply(ctx, "本毛沒在唱").await)
-    }
+    stop_for_guild(ctx, guild_id).await;
     Ok(())
 }
