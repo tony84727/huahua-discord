@@ -1,4 +1,10 @@
-use crate::fx::{Controller, Creator, DiscordOrigin, Fx, MediaOrigin, PreviewingFx, Repository};
+use crate::{
+    audio::{mp3_to_songbird_input, try_play_source},
+    fx::{
+        Controller, Creator, DiscordOrigin, Fx, FxIdentity, GetFxError, MediaOrigin, PreviewingFx,
+        Repository, RepositoryGetError,
+    },
+};
 use rand::{distributions::Uniform, prelude::Distribution};
 use serenity::{
     builder::{CreateApplicationCommand, CreateEmbed},
@@ -16,7 +22,7 @@ use serenity::{
     },
     utils::Colour,
 };
-use std::{borrow::Cow, time::Duration};
+use std::{borrow::Cow, io::Cursor, time::Duration};
 
 use super::data::{InteractionData, InteractionDataRegistry};
 
@@ -89,6 +95,19 @@ where
                             .min_int_value(1)
                     })
             })
+            .create_option(|option| {
+                option
+                    .name("play")
+                    .description("播放音效指令")
+                    .kind(ApplicationCommandOptionType::SubCommand)
+                    .create_sub_option(|option| {
+                        option
+                            .name("名稱")
+                            .description("音效指令的名稱")
+                            .kind(ApplicationCommandOptionType::String)
+                            .required(true)
+                    })
+            })
     }
     pub async fn exec(&self, ctx: &Context, command: &ApplicationCommandInteraction) {
         check_message(
@@ -130,6 +149,52 @@ where
                     }
                 } else {
                     check_message(Self::post_invalid(ctx, command).await);
+                }
+            }
+            "play" => {
+                if let Some(name) = command
+                    .data
+                    .options
+                    .get(0)
+                    .unwrap()
+                    .options
+                    .get(0)
+                    .and_then(|option| option.resolved.as_ref())
+                    .and_then(|resolved| match resolved {
+                        ApplicationCommandInteractionDataOptionValue::String(name) => Some(name),
+                        _ => None,
+                    })
+                {
+                    let guild_id = command.guild_id.unwrap();
+                    let identity = FxIdentity(guild_id, name.clone());
+                    let fx_media = match self.controller.get(&identity).await {
+                        Ok(fx) => fx,
+                        Err(GetFxError::Repository(RepositoryGetError::NotFound)) => {
+                            log::debug!("{:?} fx not found", &identity);
+                            if let Err(why) = command
+                                .create_followup_message(ctx, |response| {
+                                    response.content("本毛找不到此指令")
+                                })
+                                .await
+                            {
+                                log::error!("{:?}", why);
+                            }
+                            return;
+                        }
+                        Err(why) => {
+                            log::error!("{:?}", why);
+                            return;
+                        }
+                    };
+                    if let Err(err) = try_play_source(
+                        ctx,
+                        guild_id,
+                        mp3_to_songbird_input(Cursor::new(fx_media.1)),
+                    )
+                    .await
+                    {
+                        log::error!("{:?}", err);
+                    }
                 }
             }
             x => {

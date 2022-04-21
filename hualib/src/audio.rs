@@ -15,8 +15,7 @@ use std::{
 
 use crate::discord::check_msg;
 
-#[allow(dead_code)]
-fn mp3_to_songbird_input<R: Read + Seek + Send + Sync + 'static>(source: R) -> Input {
+pub fn mp3_to_songbird_input<R: Read + Seek + Send + Sync + 'static>(source: R) -> Input {
     let decoder = rodio::Decoder::new_mp3(source).unwrap();
     let source = RodioMediaSource { decoder };
     let reader = Reader::Extension(Box::new(source));
@@ -158,7 +157,11 @@ pub enum PlayError {
     CannotPlay,
 }
 
-async fn try_play_source(ctx: &Context, guild_id: GuildId, source: Input) -> Result<(), PlayError> {
+pub async fn try_play_source(
+    ctx: &Context,
+    guild_id: GuildId,
+    source: Input,
+) -> Result<(), PlayError> {
     let manager = songbird::get(ctx).await.unwrap();
     match manager.get(guild_id) {
         Some(handler_lock) => {

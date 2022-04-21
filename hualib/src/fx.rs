@@ -136,6 +136,7 @@ pub enum RepositoryAddError {
     AlreadyExists,
 }
 
+#[derive(Debug)]
 pub enum RepositoryGetError {
     IO(mongodb::error::Error),
     NotFound,
@@ -145,7 +146,7 @@ pub enum RepositoryGetError {
 pub trait Repository: Send + Sync {
     async fn add_draft(&self, fx: Fx) -> Result<(), RepositoryAddError>;
     async fn add(&self, fx: Fx) -> Result<(), RepositoryAddError>;
-    async fn get(&self, name: &str) -> Result<Fx, RepositoryGetError>;
+    async fn get(&self, identity: &FxIdentity) -> Result<Fx, RepositoryGetError>;
 }
 
 pub struct MongoDBRepository {
@@ -171,9 +172,10 @@ impl Repository for MongoDBRepository {
             .map_err(RepositoryAddError::IO)
     }
 
-    async fn get(&self, name: &str) -> Result<Fx, RepositoryGetError> {
+    async fn get(&self, identity: &FxIdentity) -> Result<Fx, RepositoryGetError> {
+        let FxIdentity(guild_id, name) = identity;
         let condition = doc! {
-            "name": name
+            "name": name,
         };
         match self
             .client
@@ -322,6 +324,17 @@ pub struct PreviewingFx {
     pub fx: Fx,
 }
 
+#[derive(Debug)]
+pub struct FxIdentity(pub GuildId, pub String);
+
+pub struct FxWithMedia(pub Fx, pub Vec<u8>);
+
+#[derive(Debug)]
+pub enum GetFxError<C> {
+    Repository(RepositoryGetError),
+    Create(C),
+}
+
 pub struct Controller<C, R>
 where
     C: Creator,
@@ -351,5 +364,20 @@ where
 
     pub async fn confirm_create(&self, fx: Fx) -> Result<(), RepositoryAddError> {
         self.repository.add(fx).await
+    }
+    pub async fn get(&self, identity: &FxIdentity) -> Result<FxWithMedia, GetFxError<C::Error>> {
+        let fx = self
+            .repository
+            .get(identity)
+            .await
+            .map_err(GetFxError::Repository)?;
+        let mut media = self
+            .creator
+            .create(&fx.media)
+            .await
+            .map_err(GetFxError::Create)?;
+        let mut buf = vec![];
+        media.read_to_end(&mut buf).unwrap();
+        Ok(FxWithMedia(fx, buf))
     }
 }
