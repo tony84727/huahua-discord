@@ -1,9 +1,9 @@
 use crate::{
     audio::{
-        ensure_join_voice, stop_for_guild, try_join_channel, try_parse_voice_channel_id,
+        join_channel, stop_for_guild, try_join_authors_channel, try_parse_voice_channel_id,
         try_play_file, try_play_ytdl, PlayError,
     },
-    discord::check_msg,
+    discord::{check_serenity_result, MessageWrapper},
 };
 use serenity::{
     client::Context,
@@ -20,12 +20,28 @@ struct Music;
 
 #[command]
 async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let guild_id = match msg.guild_id {
+        Some(id) => id,
+        None => {
+            return Ok(());
+        }
+    };
     let channel_id = args.single::<String>().ok();
     let channel_id = match channel_id {
-        Some(id) => try_parse_voice_channel_id(ctx, &id).await,
-        None => None,
+        Some(id) => match try_parse_voice_channel_id(ctx, &id).await {
+            Some(id) => id,
+            None => {
+                return Ok(());
+            }
+        },
+        None => {
+            return Ok(());
+        }
     };
-    try_join_channel(ctx, msg, channel_id).await;
+    if let Err(why) = join_channel(ctx, guild_id, channel_id).await {
+        check_serenity_result(msg.reply(ctx, "本毛無法加入您的頻道").await);
+        log::error!("fail to join the channel, err: {:?}", why);
+    }
     Ok(())
 }
 
@@ -34,26 +50,22 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let url = match args.single::<String>() {
         Ok(url) => url,
         Err(_) => {
-            check_msg(msg.reply(&ctx.http, "用法!play <URL>").await);
+            check_serenity_result(msg.reply(&ctx.http, "用法!play <URL>").await);
             return Ok(());
         }
     };
     let guild = msg.guild(&ctx.cache).unwrap();
     let guild_id = guild.id;
-    let play_result = try_play_ytdl(ctx, msg, &url, guild_id).await;
-    match play_result {
-        Err(err) if err == PlayError::NotInChannel => {
-            try_join_channel(ctx, msg, None).await;
-            try_play_ytdl(ctx, msg, &url, guild_id).await.unwrap();
-        }
-        _ => (),
+    try_join_authors_channel(ctx, MessageWrapper(ctx, msg)).await;
+    if let Err(why) = try_play_ytdl(ctx, msg, &url, guild_id).await {
+        log::error!("fail to play {:?}", why);
     }
     Ok(())
 }
 
 #[command]
 async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
-    ensure_join_voice(ctx, msg).await;
+    try_join_authors_channel(ctx, MessageWrapper(ctx, msg)).await;
     match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3").await {
         Err(err) if err == PlayError::NotInChannel => {
             try_play_file(ctx, msg.guild_id.unwrap(), "./resources/tc.mp3")
@@ -67,7 +79,7 @@ async fn tbc(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn pwtf(ctx: &Context, msg: &Message) -> CommandResult {
-    ensure_join_voice(ctx, msg).await;
+    try_join_authors_channel(ctx, MessageWrapper(ctx, msg)).await;
     match try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3").await {
         Err(err) if err == PlayError::NotInChannel => {
             try_play_file(ctx, msg.guild_id.unwrap(), "./resources/pwtf.mp3")

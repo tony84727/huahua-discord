@@ -13,7 +13,7 @@ use std::{
     io::{Read, Seek, SeekFrom},
 };
 
-use crate::discord::check_msg;
+use crate::discord::{check_serenity_result, AuthorVoiceChannelFinder, Replyable};
 
 pub fn mp3_to_songbird_input<R: Read + Seek + Send + Sync + 'static>(source: R) -> Input {
     let decoder = rodio::Decoder::new_mp3(source).unwrap();
@@ -79,7 +79,7 @@ where
     }
 }
 
-async fn join_channel(
+pub async fn join_channel(
     ctx: &Context,
     guild_id: GuildId,
     channel_id: ChannelId,
@@ -93,41 +93,24 @@ async fn join_channel(
     result
 }
 
-async fn find_voice_channel_of_user(ctx: &Context, msg: &Message) -> Option<(GuildId, ChannelId)> {
-    let channel_id = match msg
-        .guild(&ctx.cache)
-        .unwrap()
-        .voice_states
-        .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id)
-    {
-        Some(channel_id) => channel_id,
-        None => {
-            return None;
-        }
-    };
-    msg.guild_id.map(|guild_id| (guild_id, channel_id))
-}
-
-pub async fn try_join_channel(ctx: &Context, msg: &Message, channel_id: Option<ChannelId>) {
-    match channel_id {
-        Some(channel_id) => {
-            join_channel(ctx, msg.guild_id.unwrap(), channel_id)
-                .await
-                .unwrap();
-        }
-        None => match find_voice_channel_of_user(ctx, msg).await {
-            Some((guild_id, channel_id)) => match join_channel(ctx, guild_id, channel_id).await {
-                Ok(()) => (),
-                Err(err) => {
-                    log::error!("fail to join voice channel, {:?}", err)
-                }
-            },
-            None => {
-                check_msg(msg.reply(ctx, format!("您沒有在任何語音頻道")).await);
+pub async fn try_join_authors_channel<I: Replyable + AuthorVoiceChannelFinder>(
+    ctx: &Context,
+    intent: I,
+) {
+    match intent.find_user_voice_channel().await {
+        Ok(Some((guild_id, channel_id))) => match join_channel(ctx, guild_id, channel_id).await {
+            Ok(()) => (),
+            Err(err) => {
+                log::error!("fail to join voice channel, {:?}", err)
             }
         },
-    };
+        Ok(None) => {
+            check_serenity_result(intent.reply(format!("您沒有在任何語音頻道").as_str()).await);
+        }
+        Err(why) => {
+            log::error!("fail to find user's voice channel, {:?}", why);
+        }
+    }
 }
 
 pub async fn try_parse_voice_channel_id(ctx: &Context, id: &str) -> Option<ChannelId> {
@@ -183,7 +166,7 @@ pub async fn try_play_ytdl(
         Ok(source) => source,
         Err(why) => {
             log::error!("cannot play youtube, url: {:?}", why);
-            check_msg(msg.reply(&ctx.http, "無法播放QAQ").await);
+            check_serenity_result(msg.reply(&ctx.http, "無法播放QAQ").await);
             return Ok(());
         }
     };
@@ -210,8 +193,4 @@ pub async fn stop_for_guild(ctx: &Context, guild_id: GuildId) {
     if let Some(call) = manager.get(guild_id) {
         call.lock().await.stop()
     }
-}
-
-pub async fn ensure_join_voice(ctx: &Context, msg: &Message) {
-    try_join_channel(ctx, msg, None).await;
 }

@@ -173,7 +173,7 @@ impl Repository for MongoDBRepository {
     }
 
     async fn get(&self, identity: &FxIdentity) -> Result<Fx, RepositoryGetError> {
-        let FxIdentity(guild_id, name) = identity;
+        let FxIdentity(_guild_id, name) = identity;
         let condition = doc! {
             "name": name,
         };

@@ -1,5 +1,6 @@
 use crate::{
-    audio::{mp3_to_songbird_input, try_play_source},
+    audio::{mp3_to_songbird_input, try_join_authors_channel, try_play_source},
+    discord::InteractionWrapper,
     fx::{
         Controller, Creator, DiscordOrigin, Fx, FxIdentity, GetFxError, MediaOrigin, PreviewingFx,
         Repository, RepositoryGetError,
@@ -186,6 +187,7 @@ where
                             return;
                         }
                     };
+                    try_join_authors_channel(ctx, InteractionWrapper(ctx, command)).await;
                     if let Err(err) = try_play_source(
                         ctx,
                         guild_id,
