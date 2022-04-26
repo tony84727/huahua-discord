@@ -10,8 +10,8 @@ use crate::fx::{Controller, Creator, Fx, Repository};
 
 use self::data::InteractionData;
 
-pub mod create_fx;
 pub mod data;
+pub mod fx;
 
 #[derive(Debug, PartialEq)]
 struct MessageComponentIntent {
