@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use hualib::fx::{self, Creator};
+use huahua_discord::fx::{self, Creator};
 use std::{fs, io, time};
 
 #[derive(Parser)]

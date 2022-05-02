@@ -4,9 +4,9 @@ use serenity::framework::StandardFramework;
 use serenity::model::gateway::GatewayIntents;
 use songbird::SerenityInit;
 
-use hualib::bot::Handler;
-use hualib::config;
-use hualib::music::MUSIC_GROUP;
+use huahua_discord::bot::Handler;
+use huahua_discord::config;
+use huahua_discord::music::MUSIC_GROUP;
 
 #[tokio::main]
 async fn main() {
