@@ -19,6 +19,7 @@ futures = "0.3.21"
 chrono = "0.4.19"
 rand = "0.8.5"
 clap = {version = "3.1.6", features = ["derive"]}
+regex = "1.5.5"
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity.git"
@@ -28,3 +29,7 @@ features = ["voice", "unstable_discord_api"]
 [dependencies.songbird]
 git = "https://github.com/serenity-rs/songbird.git"
 branch="next"
+
+[dev-dependencies]
+test-case = "2.0.2"
+bytes = "1.1.0"
