@@ -157,7 +157,6 @@ impl<R: Read> TappableReader<R> {
 
 #[cfg(test)]
 mod tests {
-    // use bytes::
     use bytes::Buf;
     use std::io::{Cursor, Read};
 

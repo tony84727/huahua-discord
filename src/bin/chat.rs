@@ -1,4 +1,5 @@
 use huahua_discord::config;
+use regex::Regex;
 use serenity::{client::Client, framework::StandardFramework};
 use std::io::Write;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -37,6 +38,55 @@ impl InteractivePrompt {
 
     fn clean_line() {
         todo!()
+    }
+}
+
+#[derive(PartialEq, Debug)]
+struct ParsedCommand {
+    command: String,
+    args: String,
+}
+
+struct CommandParser {
+    command_pattern: regex::Regex,
+}
+
+impl CommandParser {
+    fn new() -> Self {
+        Self {
+            command_pattern: Regex::new(r"^%(?P<command>\S+)\s+(?P<args>.*)").unwrap(),
+        }
+    }
+
+    fn parse(&self, input: &str) -> Option<ParsedCommand> {
+        self.command_pattern.captures(input).and_then(|capture| {
+            let command = match capture.name("command") {
+                Some(command) => command.as_str().to_string(),
+                None => {
+                    return None;
+                }
+            };
+            let args = match capture.name("args") {
+                Some(args) => args.as_str().to_string(),
+                None => {
+                    return None;
+                }
+            };
+            Some(ParsedCommand { command, args })
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case("%switch 123123" => Some(ParsedCommand{command: "switch".to_string(), args: "123123".to_string()}))]
+    #[test_case("hello world" => None)]
+    fn test_command_parser(input: &str) -> Option<ParsedCommand> {
+        let parser = CommandParser::new();
+        parser.parse(input)
     }
 }
 
