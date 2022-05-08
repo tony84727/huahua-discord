@@ -162,13 +162,17 @@ mod tests {
 
     use super::TappableReader;
 
+    fn str_to_bytes_vec(content: &str) -> Vec<u8> {
+        content.as_bytes().to_vec()
+    }
+
     #[test]
     fn test_normal_read() {
         let reader = Cursor::new(b"hello world").reader();
         let mut reader = TappableReader::new(reader);
         let mut output = vec![];
         reader.read_to_end(&mut output).unwrap();
-        assert_eq!(Vec::from(b"hello world"), output);
+        assert_eq!(str_to_bytes_vec("hello world"), output);
     }
 
     #[test]
@@ -180,6 +184,6 @@ mod tests {
         reader.read_to_end(&mut output).unwrap();
         let mut tapped_output = vec![];
         tapped.read_to_end(&mut tapped_output).unwrap();
-        assert_eq!(Vec::from(b"hello world"), tapped_output);
+        assert_eq!(str_to_bytes_vec("hello world"), tapped_output);
     }
 }

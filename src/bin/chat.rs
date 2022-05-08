@@ -1,50 +1,37 @@
 use huahua_discord::config;
 use regex::Regex;
+use serenity::model::id::GuildId;
 use serenity::{client::Client, framework::StandardFramework};
-use std::io::Write;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::io::{self, BufRead, Write};
 
 struct InteractivePrompt {
     prompt: String,
-    sender: Sender<Result<String, std::io::Error>>,
+}
+
+impl Iterator for InteractivePrompt {
+    type Item = io::Result<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.prompt();
+        std::io::stdin().lock().lines().next()
+    }
 }
 
 impl InteractivePrompt {
-    fn new(prompt: String) -> (Self, Receiver<Result<String, std::io::Error>>) {
-        let (sender, receiver) = mpsc::channel();
-        (Self { prompt, sender }, receiver)
-    }
-
-    fn run(&self) {
-        self.prompt();
-        for line in std::io::stdin().lines() {
-            if line.is_ok() {
-                self.prompt();
-            }
-            self.sender.send(line);
-        }
-    }
-
-    fn write(&self) {
-        Self::clean_line();
-        println!();
-        self.prompt();
+    fn new(prompt: String) -> Self {
+        Self { prompt }
     }
 
     fn prompt(&self) {
         print!("{}", self.prompt);
         std::io::stdout().flush().unwrap();
     }
-
-    fn clean_line() {
-        todo!()
-    }
 }
 
 #[derive(PartialEq, Debug)]
 struct ParsedCommand {
     command: String,
-    args: String,
+    args: Option<String>,
 }
 
 struct CommandParser {
@@ -54,7 +41,7 @@ struct CommandParser {
 impl CommandParser {
     fn new() -> Self {
         Self {
-            command_pattern: Regex::new(r"^%(?P<command>\S+)\s+(?P<args>.*)").unwrap(),
+            command_pattern: Regex::new(r"^%(?P<command>\S+)(\s+(?P<args>.*))?").unwrap(),
         }
     }
 
@@ -66,14 +53,40 @@ impl CommandParser {
                     return None;
                 }
             };
-            let args = match capture.name("args") {
-                Some(args) => args.as_str().to_string(),
-                None => {
-                    return None;
-                }
-            };
+            let args = capture.name("args").map(|arg| arg.as_str().to_string());
             Some(ParsedCommand { command, args })
         })
+    }
+}
+
+#[derive(Default)]
+struct ChatContext {
+    current_channel: Option<GuildId>,
+}
+
+struct ChatConsole {
+    context: ChatContext,
+    prompt: InteractivePrompt,
+    parser: CommandParser,
+}
+
+impl ChatConsole {
+    fn new() -> Self {
+        Self {
+            prompt: InteractivePrompt::new(">".to_string()),
+            parser: CommandParser::new(),
+            context: Default::default(),
+        }
+    }
+    fn run(self) -> io::Result<()> {
+        for line in self.prompt.into_iter() {
+            let line = line?;
+            match self.parser.parse(&line) {
+                Some(command) => println!("invoke command: {}", command.command),
+                None => log::info!("received {}", line),
+            };
+        }
+        Ok(())
     }
 }
 
@@ -82,7 +95,8 @@ mod tests {
     use super::*;
     use test_case::test_case;
 
-    #[test_case("%switch 123123" => Some(ParsedCommand{command: "switch".to_string(), args: "123123".to_string()}))]
+    #[test_case("%switch 123123" => Some(ParsedCommand{command: "switch".to_string(), args: Some("123123".to_string())}))]
+    #[test_case("%listen" => Some(ParsedCommand{command: "listen".to_string(), args: None}))]
     #[test_case("hello world" => None)]
     fn test_command_parser(input: &str) -> Option<ParsedCommand> {
         let parser = CommandParser::new();
@@ -100,12 +114,6 @@ async fn main() {
         .framework(StandardFramework::default())
         .await
         .expect("error while creating client");
-    let (prompt, receiver) = InteractivePrompt::new(">".to_string());
-    tokio::spawn(async move {
-        prompt.run();
-    });
-    for line in receiver.into_iter() {
-        let line = line.unwrap();
-        eprintln!("in: {}", line);
-    }
+    let console = ChatConsole::new();
+    console.run().unwrap();
 }
