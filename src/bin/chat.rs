@@ -1,7 +1,9 @@
 use huahua_discord::config;
 use regex::Regex;
-use serenity::model::id::GuildId;
+use serenity::model::id::{ChannelId, GuildId};
 use serenity::{client::Client, framework::StandardFramework};
+use std::collections::HashMap;
+use std::fmt::Debug;
 use std::io::{self, BufRead, Write};
 
 struct InteractivePrompt {
@@ -59,30 +61,139 @@ impl CommandParser {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ChatContext {
-    current_channel: Option<GuildId>,
+    current_channel: Option<ChannelIdentity>,
 }
 
 struct ChatConsole {
     context: ChatContext,
     prompt: InteractivePrompt,
     parser: CommandParser,
+    commander: Commands,
 }
+
+#[derive(PartialEq, Eq, Debug)]
+struct ChannelIdentity(GuildId, ChannelId);
+
+/// Chat console's command
+trait Command: Debug {
+    fn exec(&self, args: Option<String>);
+}
+
+#[derive(Debug)]
+struct SelectCommand<'c> {
+    context: &'c mut ChatContext,
+}
+
+fn consume_and_parse_u64<'a, I: Iterator<Item = &'a str>>(iterator: &mut I) -> Option<u64> {
+    let str = iterator.next();
+    match str {
+        Some(number) => match number.parse() {
+            Ok(number) => Some(number),
+            Err(_) => None,
+        },
+        None => None,
+    }
+}
+
+fn parse_channel_identity(input: &str) -> Option<ChannelIdentity> {
+    let mut segments = input.split(' ').map(|x| x.trim());
+    let guild_id = match consume_and_parse_u64(&mut segments) {
+        Some(n) => n,
+        None => {
+            return None;
+        }
+    };
+    let channel_id = match consume_and_parse_u64(&mut segments) {
+        Some(n) => n,
+        None => {
+            return None;
+        }
+    };
+    Some(ChannelIdentity(GuildId(guild_id), ChannelId(channel_id)))
+}
+
+impl<'c> Command for SelectCommand<'c> {
+    fn exec(&self, args: Option<String>) {
+        let args = match args {
+            Some(args) => args,
+            None => {
+                self.print_usage();
+                return;
+            }
+        };
+        match parse_channel_identity(&args) {
+            Some(identity) => {
+                self.context.current_channel = Some(identity);
+                println!("switch to channel {}/{}", identity.0, identity.1);
+            }
+            None => {
+                println!("cannot parse channel identity");
+                self.print_usage();
+            }
+        }
+    }
+}
+
+impl<'c> SelectCommand<'c> {
+    fn print_usage(&self) {
+        println!("please specify a channel identity(guildId/channelId). usage: %select <guildId>/<channelId>");
+    }
+}
+
+// struct Commander {
+//     commands: HashMap<String, Box<dyn Command>>,
+// }
+
+
+
+
+enum Commands {
+    Use(SelectCommand),
+}
+
+struct Commander {
+    commands: Commands
+}
+
+impl Commander {
+    fn find_command(&self, name: &str) -> Option<&Box<dyn Command>> {
+        match name {
+            "use" => SelectCommand
+        }
+    }
+}
+
 
 impl ChatConsole {
     fn new() -> Self {
-        Self {
+        let mut instance = Self {
             prompt: InteractivePrompt::new(">".to_string()),
             parser: CommandParser::new(),
             context: Default::default(),
-        }
+            commander: Commands::new(),
+        };
+        let select_command = SelectCommand {
+            context: &mut instance.context,
+        };
+        instance.commander.register_command("use", select_command);
+        instance
     }
     fn run(self) -> io::Result<()> {
         for line in self.prompt.into_iter() {
             let line = line?;
             match self.parser.parse(&line) {
-                Some(command) => println!("invoke command: {}", command.command),
+                Some(ParsedCommand { command, args }) => match command {
+                    match self.commander.find_command(&command) {
+                        Some(command) => {
+                            command.exec(args),
+                        }
+                        None => {
+                            todo!();
+                        }
+                    }
+                },
                 None => log::info!("received {}", line),
             };
         }
@@ -102,6 +213,26 @@ mod tests {
         let parser = CommandParser::new();
         parser.parse(input)
     }
+
+    #[test_case("123 123" => Some(ChannelIdentity(GuildId(123), ChannelId(123))))]
+    fn test_parse_channel_identity(input: &str) -> Option<ChannelIdentity> {
+        parse_channel_identity(input)
+    }
+
+    #[derive(Clone, PartialEq, Eq, Debug)]
+    struct DummyCommand(String);
+
+    impl Command for DummyCommand {
+        fn exec(&self, args: Option<String>) {}
+    }
+
+    // #[test]
+    // fn test_commander_find_command() {
+    //     let mut commander = Commander::new();
+    //     let command = DummyCommand("a".to_string());
+    //     commander.register_command("a", command.clone());
+    //     assert_eq!(&command, commander.find_command("a").unwrap().as_ref());
+    // }
 }
 
 #[tokio::main]
