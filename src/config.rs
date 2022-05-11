@@ -27,7 +27,6 @@ impl Database {
 #[derive(Serialize, Deserialize)]
 pub struct Bot {
     pub token: String,
-    pub guild_id: u64,
     pub application_id: u64,
     pub database: Database,
 }
