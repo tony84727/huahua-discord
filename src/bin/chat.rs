@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use huahua_discord::config;
+use huahua_discord::log::common_log_setting;
 use regex::Regex;
 use serenity::client::{Context, EventHandler};
 use serenity::model::id::{ChannelId, GuildId};
@@ -258,9 +259,7 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
-    env_logger::Builder::from_default_env()
-        .filter_module("hualib", log::LevelFilter::Debug)
-        .init();
+    common_log_setting();
     let bot_config = config::Bot::load().await.expect("fail to load bot config");
     let mut client = Client::builder(bot_config.token, GatewayIntents::GUILDS)
         .event_handler(Handler::default())

@@ -5,4 +5,5 @@ mod discord;
 pub mod fx;
 mod interactions;
 mod ioutils;
+pub mod log;
 pub mod music;

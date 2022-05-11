@@ -1,3 +1,4 @@
+use huahua_discord::log::common_log_setting;
 use mongodb::Client as MongodbClient;
 use serenity::client::Client;
 use serenity::framework::StandardFramework;
@@ -10,9 +11,7 @@ use huahua_discord::music::MUSIC_GROUP;
 
 #[tokio::main]
 async fn main() {
-    env_logger::Builder::from_default_env()
-        .filter_module("hualib", log::LevelFilter::Debug)
-        .init();
+    common_log_setting();
     let bot_config = config::Bot::load().await.expect("fail to load bot config");
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("!"))
@@ -22,13 +21,16 @@ async fn main() {
         .expect("initializing mongodb client");
 
     let database = mongo_client.database("huahua");
-    let mut client = Client::builder(bot_config.token, GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
-        .event_handler(Handler::new(database))
-        .application_id(bot_config.application_id)
-        .framework(framework)
-        .register_songbird()
-        .await
-        .expect("error while creating client");
+    let mut client = Client::builder(
+        bot_config.token,
+        GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
+    )
+    .event_handler(Handler::new(database))
+    .application_id(bot_config.application_id)
+    .framework(framework)
+    .register_songbird()
+    .await
+    .expect("error while creating client");
     tokio::spawn(async move {
         let _ = client
             .start()
