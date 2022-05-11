@@ -3,6 +3,7 @@ use huahua_discord::config;
 use regex::Regex;
 use serenity::client::{Context, EventHandler};
 use serenity::model::id::{ChannelId, GuildId};
+use serenity::prelude::GatewayIntents;
 use serenity::{client::Client, framework::StandardFramework};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -261,7 +262,7 @@ async fn main() {
         .filter_module("hualib", log::LevelFilter::Debug)
         .init();
     let bot_config = config::Bot::load().await.expect("fail to load bot config");
-    let mut client = Client::builder(bot_config.token)
+    let mut client = Client::builder(bot_config.token, GatewayIntents::GUILDS)
         .event_handler(Handler::default())
         .framework(StandardFramework::default())
         .await

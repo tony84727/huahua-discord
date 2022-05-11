@@ -22,8 +22,7 @@ async fn main() {
         .expect("initializing mongodb client");
 
     let database = mongo_client.database("huahua");
-    let mut client = Client::builder(bot_config.token)
-        .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
+    let mut client = Client::builder(bot_config.token, GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
         .event_handler(Handler::new(database))
         .application_id(bot_config.application_id)
         .framework(framework)
