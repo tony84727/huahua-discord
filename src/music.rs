@@ -27,21 +27,24 @@ async fn join(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         }
     };
     let channel_id = args.single::<String>().ok();
-    let channel_id = match channel_id {
+    match channel_id {
         Some(id) => match try_parse_voice_channel_id(ctx, &id).await {
-            Some(id) => id,
+            Some(id) => {
+                if let Err(why) = join_channel(ctx, guild_id, id).await {
+                    check_serenity_result(msg.reply(ctx, "本毛無法加入您的頻道").await);
+                    log::error!("fail to join the channel, err: {:?}", why);
+                }
+            }
             None => {
+                check_serenity_result(msg.reply(ctx, "無效的id").await);
                 return Ok(());
             }
         },
         None => {
-            return Ok(());
+            try_join_authors_channel(ctx, MessageWrapper(ctx, msg)).await;
         }
-    };
-    if let Err(why) = join_channel(ctx, guild_id, channel_id).await {
-        check_serenity_result(msg.reply(ctx, "本毛無法加入您的頻道").await);
-        log::error!("fail to join the channel, err: {:?}", why);
     }
+
     Ok(())
 }
 
