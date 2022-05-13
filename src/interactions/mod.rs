@@ -1,7 +1,7 @@
 use mongodb::bson::{self, oid::ObjectId};
 use serenity::{
     client::Context,
-    model::interactions::{
+    model::application::interaction::{
         message_component::MessageComponentInteraction, InteractionResponseType,
     },
 };

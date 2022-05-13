@@ -11,15 +11,17 @@ use serenity::{
     builder::{CreateApplicationCommand, CreateEmbed},
     client::Context,
     model::{
-        channel::{AttachmentType, Message},
-        interactions::{
-            application_command::{
-                ApplicationCommandInteraction, ApplicationCommandInteractionDataOption,
-                ApplicationCommandInteractionDataOptionValue, ApplicationCommandOptionType,
+        application::{
+            command::CommandOptionType,
+            component::ButtonStyle,
+            interaction::{
+                application_command::{
+                    ApplicationCommandInteraction, CommandDataOption, CommandDataOptionValue,
+                },
+                InteractionResponseType,
             },
-            message_component::ButtonStyle,
-            InteractionResponseType,
         },
+        channel::{AttachmentType, Message},
     },
     utils::Colour,
 };
@@ -58,40 +60,40 @@ where
                 option
                     .name("create")
                     .description("創立音效指令")
-                    .kind(ApplicationCommandOptionType::SubCommand)
+                    .kind(CommandOptionType::SubCommand)
                     .create_sub_option(|option| {
                         option
                             .name("名稱")
                             .description("音效指令的名稱")
-                            .kind(ApplicationCommandOptionType::String)
+                            .kind(CommandOptionType::String)
                             .required(true)
                     })
                     .create_sub_option(|option| {
                         option
                             .name("描述")
                             .description("音效指令的描述")
-                            .kind(ApplicationCommandOptionType::String)
+                            .kind(CommandOptionType::String)
                             .required(true)
                     })
                     .create_sub_option(|option| {
                         option
                             .name("來源")
                             .description("填入影片的URL")
-                            .kind(ApplicationCommandOptionType::String)
+                            .kind(CommandOptionType::String)
                             .required(true)
                     })
                     .create_sub_option(|option| {
                         option
                             .name("開始秒數")
                             .description("開始秒數，預設0秒開始")
-                            .kind(ApplicationCommandOptionType::Integer)
+                            .kind(CommandOptionType::Integer)
                             .min_int_value(0)
                     })
                     .create_sub_option(|option| {
                         option
                             .name("持續秒數")
                             .description("持續秒數，最大20秒，預設5秒")
-                            .kind(ApplicationCommandOptionType::Integer)
+                            .kind(CommandOptionType::Integer)
                             .max_int_value(20)
                             .min_int_value(1)
                     })
@@ -100,12 +102,12 @@ where
                 option
                     .name("play")
                     .description("播放音效指令")
-                    .kind(ApplicationCommandOptionType::SubCommand)
+                    .kind(CommandOptionType::SubCommand)
                     .create_sub_option(|option| {
                         option
                             .name("名稱")
                             .description("音效指令的名稱")
-                            .kind(ApplicationCommandOptionType::String)
+                            .kind(CommandOptionType::String)
                             .required(true)
                     })
             })
@@ -162,7 +164,7 @@ where
                     .get(0)
                     .and_then(|option| option.resolved.as_ref())
                     .and_then(|resolved| match resolved {
-                        ApplicationCommandInteractionDataOptionValue::String(name) => Some(name),
+                        CommandDataOptionValue::String(name) => Some(name),
                         _ => None,
                     })
                 {
@@ -318,15 +320,12 @@ where
             })
             .await
     }
-    fn option_fx(
-        discord: DiscordOrigin,
-        options: &[ApplicationCommandInteractionDataOption],
-    ) -> Option<Fx> {
+    fn option_fx(discord: DiscordOrigin, options: &[CommandDataOption]) -> Option<Fx> {
         let start = options
             .get(3)
             .and_then(|option| option.resolved.as_ref())
             .map(|value| match value {
-                ApplicationCommandInteractionDataOptionValue::Integer(value) => *value as u64,
+                CommandDataOptionValue::Integer(value) => *value as u64,
                 _ => 0,
             })
             .unwrap_or(0_u64);
@@ -334,7 +333,7 @@ where
             .get(4)
             .and_then(|option| option.resolved.as_ref())
             .map(|value| match value {
-                ApplicationCommandInteractionDataOptionValue::Integer(value) => {
+                CommandDataOptionValue::Integer(value) => {
                     let value = *value;
                     if value == 0 {
                         5
@@ -351,27 +350,21 @@ where
                 .get(0)
                 .and_then(|option| option.resolved.as_ref())
                 .and_then(|value| match value {
-                    ApplicationCommandInteractionDataOptionValue::String(value) => {
-                        Some(value.clone())
-                    }
+                    CommandDataOptionValue::String(value) => Some(value.clone()),
                     _ => None,
                 }),
             description: options
                 .get(1)
                 .and_then(|option| option.resolved.as_ref())
                 .and_then(|value| match value {
-                    ApplicationCommandInteractionDataOptionValue::String(value) => {
-                        Some(value.clone())
-                    }
+                    CommandDataOptionValue::String(value) => Some(value.clone()),
                     _ => None,
                 }),
             url: options
                 .get(2)
                 .and_then(|option| option.resolved.as_ref())
                 .and_then(|value| match value {
-                    ApplicationCommandInteractionDataOptionValue::String(value) => {
-                        Some(value.clone())
-                    }
+                    CommandDataOptionValue::String(value) => Some(value.clone()),
                     _ => None,
                 }),
             start,

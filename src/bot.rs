@@ -3,7 +3,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serenity::{
     client::{Context, EventHandler},
-    model::{id::GuildId, interactions::Interaction, prelude::Ready},
+    model::{application::interaction::Interaction, id::GuildId, prelude::Ready},
 };
 
 use crate::{

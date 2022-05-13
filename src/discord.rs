@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use serenity::{
     client::Context,
     model::{
+        application::interaction::application_command::ApplicationCommandInteraction,
         channel::Message,
         id::{ChannelId, GuildId},
-        interactions::application_command::ApplicationCommandInteraction,
     },
 };
 
