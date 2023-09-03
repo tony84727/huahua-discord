@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use serenity::{
+    all::CommandInteraction,
+    builder::CreateInteractionResponseFollowup,
     client::Context,
     model::{
-        application::interaction::application_command::ApplicationCommandInteraction,
         channel::Message,
         id::{ChannelId, GuildId},
     },
@@ -28,15 +29,15 @@ impl<'a> Replyable for MessageWrapper<'a> {
     }
 }
 
-pub struct InteractionWrapper<'a>(pub &'a Context, pub &'a ApplicationCommandInteraction);
+pub struct InteractionWrapper<'a>(pub &'a Context, pub &'a CommandInteraction);
 
 #[async_trait]
 impl<'a> Replyable for InteractionWrapper<'a> {
     async fn reply(&self, content: &str) -> Result<(), serenity::Error> {
-        self.1
-            .create_followup_message(self.0, |response| response.content(content))
-            .await
-            .map(|_| ())
+        self.1.create_followup(
+            self.0,
+            CreateInteractionResponseFollowup::default().content(content),
+        )
     }
 }
 

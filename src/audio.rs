@@ -1,12 +1,11 @@
 use serenity::{
-    cache::FromStrAndCache,
     client::Context,
     model::{
         channel::{Channel, ChannelType, Message},
         id::{ChannelId, GuildId},
     },
 };
-use songbird::input::{reader::MediaSource, Codec, Container, Input, Reader};
+use songbird::input::Input;
 use std::{
     ffi::OsStr,
     fmt::Debug,
@@ -149,7 +148,7 @@ pub async fn try_play_source(
     match manager.get(guild_id) {
         Some(handler_lock) => {
             let mut handler = handler_lock.lock().await;
-            handler.play_only_source(source);
+            handler.play_input(source);
             Ok(())
         }
         None => Err(PlayError::NotInChannel),
@@ -178,14 +177,7 @@ pub async fn try_play_file<P: AsRef<OsStr> + Debug>(
     guild_id: GuildId,
     path: P,
 ) -> Result<(), PlayError> {
-    let source = match songbird::ffmpeg(&path).await {
-        Ok(input) => input,
-        Err(err) => {
-            log::error!("cannot play {:?} sound effect, {:?}", path, err);
-            return Err(PlayError::CannotPlay);
-        }
-    };
-    try_play_source(ctx, guild_id, source).await
+    try_play_source(ctx, guild_id, songbird::input::File::new(&path)).await
 }
 
 pub async fn stop_for_guild(ctx: &Context, guild_id: GuildId) {

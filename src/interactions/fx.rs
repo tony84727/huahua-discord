@@ -8,26 +8,22 @@ use crate::{
 };
 use rand::{distributions::Uniform, prelude::Distribution};
 use serenity::{
-    builder::{CreateApplicationCommand, CreateEmbed},
+    all::{CommandInteraction, CommandOptionType},
+    builder::{CreateCommand, CreateCommandOption},
     client::Context,
-    model::{
-        application::{
-            command::CommandOptionType,
-            component::ButtonStyle,
-            interaction::{
-                application_command::{
-                    ApplicationCommandInteraction, CommandDataOption, CommandDataOptionValue,
-                },
-                InteractionResponseType,
-            },
-        },
-        channel::{AttachmentType, Message},
-    },
-    utils::Colour,
 };
 use std::{borrow::Cow, io::Cursor, time::Duration};
 
 use super::data::{InteractionData, InteractionDataRegistry};
+
+impl<B> From<FnMut(B) -> B> for B
+where
+    B: Default,
+{
+    fn from(value: FnOnce<B>) -> Self {
+        value(B::default())
+    }
+}
 
 pub(crate) struct CreateFxCommand<'a, C, R>
 where
@@ -49,77 +45,56 @@ where
     C: Creator,
     R: Repository,
 {
-    pub fn create<'c>(
-        &self,
-        command: &'c mut CreateApplicationCommand,
-    ) -> &'c mut CreateApplicationCommand {
-        command
-            .name("fx")
+    pub fn create<'c>(&self) -> CreateCommand {
+        CreateCommand::new("fx")
             .description("音效指令")
-            .create_option(|option| {
-                option
-                    .name("create")
-                    .description("創立音效指令")
-                    .kind(CommandOptionType::SubCommand)
-                    .create_sub_option(|option| {
-                        option
-                            .name("名稱")
-                            .description("音效指令的名稱")
-                            .kind(CommandOptionType::String)
-                            .required(true)
-                    })
-                    .create_sub_option(|option| {
-                        option
-                            .name("描述")
-                            .description("音效指令的描述")
-                            .kind(CommandOptionType::String)
-                            .required(true)
-                    })
-                    .create_sub_option(|option| {
-                        option
-                            .name("來源")
-                            .description("填入影片的URL")
-                            .kind(CommandOptionType::String)
-                            .required(true)
-                    })
-                    .create_sub_option(|option| {
-                        option
-                            .name("開始秒數")
-                            .description("開始秒數，預設0秒開始")
-                            .kind(CommandOptionType::Integer)
-                            .min_int_value(0)
-                    })
-                    .create_sub_option(|option| {
-                        option
-                            .name("持續秒數")
-                            .description("持續秒數，最大20秒，預設5秒")
-                            .kind(CommandOptionType::Integer)
-                            .max_int_value(20)
-                            .min_int_value(1)
-                    })
-            })
-            .create_option(|option| {
-                option
-                    .name("play")
-                    .description("播放音效指令")
-                    .kind(CommandOptionType::SubCommand)
-                    .create_sub_option(|option| {
-                        option
-                            .name("名稱")
-                            .description("音效指令的名稱")
-                            .kind(CommandOptionType::String)
-                            .required(true)
-                    })
-            })
+            .add_option(
+                CreateCommandOption::new(
+                    serenity::all::CommandOptionType::SubCommand,
+                    "create",
+                    "創立音效指令",
+                )
+                .add_sub_option(
+                    CreateCommandOption::new(CommandOptionType::String, "名稱", "音效指令的名稱")
+                        .required(true),
+                )
+                .add_sub_option(
+                    CreateCommandOption::new(CommandOptionType::String, "描述", "音效指令的描述")
+                        .required(true),
+                )
+                .add_sub_option(
+                    CreateCommandOption::new(CommandOptionType::String, "來源", "填入影片的URL")
+                        .required(true),
+                )
+                .add_sub_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Number,
+                        "開始秒數",
+                        "開始秒數，預設0秒開始",
+                    )
+                    .min_int_value(0),
+                )
+                .add_sub_option(
+                    CreateCommandOption::new(
+                        CommandOptionType::Number,
+                        "持續秒數",
+                        "持續秒數，最大20秒，預設5秒",
+                    )
+                    .max_int_value(20)
+                    .min_int_value(1),
+                ),
+            )
+            .add_option(
+                CreateCommandOption::new(CommandOptionType::SubCommand, "play", "播放音效指令")
+                    .add_sub_option(CreateCommandOption::new(
+                        CommandOptionType::String,
+                        "名稱",
+                        "音效指令的名稱",
+                    )),
+            )
     }
-    pub async fn exec(&self, ctx: &Context, command: &ApplicationCommandInteraction) {
-        check_message(
-            command
-                .create_interaction_response(ctx, |response| {
-                    response.kind(InteractionResponseType::DeferredChannelMessageWithSource)
-                })
-                .await,
-        );
+    pub async fn exec(&self, ctx: &Context, command: &CommandInteraction) {
+        check_message(command.defer(ctx).await);
         let discord_origin: DiscordOrigin = command.clone().into();
         let subcommand = match command
             .data

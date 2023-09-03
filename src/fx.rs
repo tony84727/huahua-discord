@@ -2,7 +2,7 @@ use chrono::serde::ts_seconds::{deserialize as from_ts, serialize as to_ts};
 use chrono::{DateTime, Utc};
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
-use serenity::model::application::interaction::application_command::ApplicationCommandInteraction;
+use serenity::all::CommandInteraction;
 use serenity::model::id::{GuildId, InteractionId, UserId};
 use songbird::input::ChildContainer;
 use std::fmt::Debug;
@@ -111,8 +111,8 @@ pub struct DiscordOrigin {
     pub drafted_at: DateTime<Utc>,
 }
 
-impl From<ApplicationCommandInteraction> for DiscordOrigin {
-    fn from(interaction: ApplicationCommandInteraction) -> Self {
+impl From<CommandInteraction> for DiscordOrigin {
+    fn from(interaction: CommandInteraction) -> Self {
         Self {
             guild: interaction.guild_id,
             interaction: interaction.id,
@@ -228,12 +228,7 @@ impl Creator for YoutubeDLCreator {
         let ffmpeg = Self::cut(origin, ytdl_out)
             .await
             .map_err(YoutubeDLCreateError::FFmepg)?;
-        Ok(
-            match songbird::input::children_to_reader::<u8>(vec![ytdl, ffmpeg]) {
-                songbird::input::Reader::Pipe(buf_reader) => buf_reader,
-                _ => panic!("unexpected"),
-            },
-        )
+        Ok(songbird::input::ChildContainer::new(vec![ytdl, ffmpeg]))
     }
 }
 

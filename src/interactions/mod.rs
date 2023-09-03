@@ -1,9 +1,6 @@
 use mongodb::bson::{self, oid::ObjectId};
 use serenity::{
-    client::Context,
-    model::application::interaction::{
-        message_component::MessageComponentInteraction, InteractionResponseType,
-    },
+    all::ComponentInteraction, builder::CreateInteractionResponseMessage, client::Context,
 };
 
 use crate::fx::{Controller, Creator, Fx, Repository};
@@ -58,7 +55,7 @@ where
             data: data::InteractionDataRegistry::new(database),
         }
     }
-    pub async fn handle(&self, ctx: &Context, interaction: &MessageComponentInteraction) {
+    pub async fn handle(&self, ctx: &Context, interaction: &ComponentInteraction) {
         let MessageComponentIntent { id, .. } =
             match MessageComponentIntent::try_from(interaction.data.custom_id.as_str()) {
                 Ok(intent) => intent,
@@ -84,36 +81,29 @@ where
         };
     }
 
-    async fn handle_create(
-        &self,
-        ctx: &Context,
-        interaction: &MessageComponentInteraction,
-        fx: Fx,
-    ) {
+    async fn handle_create(&self, ctx: &Context, interaction: &ComponentInteraction, fx: Fx) {
         if let Err(why) = self.controller.confirm_create(fx).await {
             log::error!("{:?}", why);
         }
         if let Err(why) = interaction
-            .create_interaction_response(ctx, |message| {
-                message
-                    .kind(InteractionResponseType::ChannelMessageWithSource)
-                    .interaction_response_data(|data| data.ephemeral(true).content("新增成功!"))
-            })
+            .create_response(
+                ctx,
+                CreateInteractionResponseMessage::default().content("新增成功!"),
+            )
             .await
         {
             log::error!("{:?}", why);
         }
     }
 
-    async fn report_staled(&self, ctx: &Context, interaction: &MessageComponentInteraction) {
+    async fn report_staled(&self, ctx: &Context, interaction: &ComponentInteraction) {
         if let Err(why) = interaction
-            .create_interaction_response(ctx, |message| {
-                message
-                    .kind(InteractionResponseType::ChannelMessageWithSource)
-                    .interaction_response_data(|data| {
-                        data.ephemeral(true).content("本毛忘了，請重新呼叫指令")
-                    })
-            })
+            .create_response(
+                ctx,
+                CreateInteractionResponseMessage::default()
+                    .ephemeral(true)
+                    .content("本毛忘了，請重新呼叫指令"),
+            )
             .await
         {
             log::error!("{:?}", why);
